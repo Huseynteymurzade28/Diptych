@@ -1,0 +1,23 @@
+# Rust / Cargo Build Artifacts
+/target/
+/debug/
+**/*.rs.bk
+
+# Nix Artifacts
+/result
+/result-*
+/.direnv/
+
+# VS Code / Editor config
+.vscode/
+*.swp
+*~
+
+# Environment Variables (Keep .envrc shared, but ignore local overrides/secrets)
+.env
+.envrc.local
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
+.idea/
