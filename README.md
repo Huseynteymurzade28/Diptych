@@ -42,10 +42,3 @@ You can develop Diptych on **any operating system**.
 - **`src/ui`**: Contains the GTK4 widget logic and event handling.
 - **`flake.nix`**: Provides the system libraries (GTK4, GLib, Wayland) needed for compilation (Optional for non-Nix users).
 
-## 🤝 Contributing
-
-This is a mentorship project. We iterate fast and break things often.
-
----
-
-_Built with ❤️ by Flear & Copilot (The Mentor)_
