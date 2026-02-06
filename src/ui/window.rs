@@ -1,9 +1,9 @@
 use crate::filesystem;
-use crate::ui::widgets;
+use crate::ui::{themes, widgets};
 use gtk4::prelude::*;
 use gtk4::{
-    Align, Application, ApplicationWindow, Box, Button, Entry, Label, Orientation, Paned, Popover,
-    ScrolledWindow, ToggleButton,
+    Align, Application, ApplicationWindow, Box, Button, CssProvider, Entry, Label, Orientation,
+    Paned, Popover, ScrolledWindow, StyleContext, ToggleButton,
 };
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -13,28 +13,47 @@ pub fn build(app: &Application) {
     // Determine start path
     let start_path = dirs::home_dir().unwrap_or_else(|| std::env::current_dir().unwrap());
     let current_path = Rc::new(RefCell::new(start_path));
-    
+
     // State: Show Hidden Files (Default: false)
     let show_hidden = Rc::new(RefCell::new(false));
+
+    // --- Theme Setup ---
+    let css_provider = CssProvider::new();
+    css_provider.load_from_data(themes::get_css("Tokyo Night")); // Default
+
+    // Apply CSS provider to the default display
+    if let Some(display) = gtk4::gdk::Display::default() {
+        StyleContext::add_provider_for_display(
+            &display,
+            &css_provider,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+    }
 
     // Main Window
     let window = ApplicationWindow::builder()
         .application(app)
         .title("Diptych Project")
-        .default_width(900)
+        .default_width(1000) // Slightly wider for Sidebar
         .default_height(600)
         .build();
 
     // --- Main Layout: Paned (Split View) ---
     let paned = Paned::builder()
         .orientation(Orientation::Horizontal)
-        .position(500) // Initial split position
+        .position(280) // Initial split position (adjusted for sidebar)
         .build();
 
-    // --- Left Panel: Navigation ---
-    let nav_settings_box = Box::builder()
+    // --- Left Panel Container ---
+    let left_panel_container = Box::builder()
         .orientation(Orientation::Vertical)
-        .spacing(2)
+        .css_classes(vec!["sidebar".to_string()]) // Apply sidebar theme
+        .build();
+
+    // 1. Toolbar (Hidden Toggle & Settings)
+    let toolbar_box = Box::builder()
+        .orientation(Orientation::Horizontal)
+        .spacing(5)
         .margin_top(5)
         .margin_bottom(5)
         .margin_start(10)
@@ -42,13 +61,32 @@ pub fn build(app: &Application) {
         .build();
 
     let hidden_toggle = ToggleButton::builder()
-        .label("Show Hidden Files")
+        .icon_name("view-reveal-symbolic") // Use icon instead of text for compactness
+        .tooltip_text("Toggle Hidden Files")
         .active(false)
-        .halign(Align::End)
         .build();
     
-    nav_settings_box.append(&hidden_toggle);
+    let settings_btn = Button::builder()
+        .icon_name("emblem-system-symbolic")
+        .tooltip_text("Theme Settings")
+        .build();
 
+    let settings_popover = Popover::builder().build();
+    setup_theme_popover(&settings_btn, &settings_popover, &css_provider);
+
+    toolbar_box.append(&hidden_toggle);
+    toolbar_box.append(&settings_btn);
+
+    // 2. Places Sidebar (Static Shortcuts)
+    let places_box = Box::builder()
+        .orientation(Orientation::Vertical)
+        .spacing(2)
+        .margin_top(10)
+        .margin_start(10)
+        .margin_end(10)
+        .build();
+
+    // 3. Current Directory List
     let nav_box = Box::builder()
         .orientation(Orientation::Vertical)
         .spacing(2)
@@ -58,20 +96,27 @@ pub fn build(app: &Application) {
         .margin_end(10)
         .build();
 
-    let left_panel_container = Box::builder()
-        .orientation(Orientation::Vertical)
-        .build();
-    
-    left_panel_container.append(&nav_settings_box);
-
     let scrolled_window = ScrolledWindow::builder()
         .hscrollbar_policy(gtk4::PolicyType::Never)
-        .min_content_width(330)
+        .min_content_width(250)
         .vexpand(true)
         .child(&nav_box)
         .build();
-    
+
+    // Separator between Places and Files
+    let separator = gtk4::Separator::builder()
+        .orientation(Orientation::Horizontal)
+        .margin_top(5)
+        .margin_bottom(5)
+        .build();
+
+    left_panel_container.append(&toolbar_box);
+    left_panel_container.append(&Label::builder().label("<b>Places</b>").use_markup(true).xalign(0.0).margin_start(12).build());
+    left_panel_container.append(&places_box);
+    left_panel_container.append(&separator);
+    left_panel_container.append(&Label::builder().label("<b>Files</b>").use_markup(true).xalign(0.0).margin_start(12).build());
     left_panel_container.append(&scrolled_window);
+
 
     // --- Right Panel: The "Inspector" & Actions ---
     let inspector_box = Box::builder()
@@ -84,7 +129,8 @@ pub fn build(app: &Application) {
         .hexpand(true)
         .valign(Align::Center)
         .build();
-
+    
+    // ... existing right panel code ...
     let info_label = Label::builder()
         .label("<span size='x-large' weight='bold'>Diptych</span>\n<span color='gray'>Select a file to inspect</span>")
         .use_markup(true)
@@ -92,7 +138,6 @@ pub fn build(app: &Application) {
         .wrap(true)
         .build();
 
-    // Inspector Action Buttons
     let open_button = Button::builder()
         .label("Open")
         .halign(Align::Center)
@@ -100,23 +145,23 @@ pub fn build(app: &Application) {
         .css_classes(vec!["suggested-action".to_string()])
         .build();
 
-    // Creation Area
     let creation_box = Box::builder()
-        .orientation(Orientation::Horizontal)
-        .spacing(10)
-        .halign(Align::Center)
-        .margin_top(20)
-        .build();
-
+         .orientation(Orientation::Horizontal)
+         .spacing(10)
+         .halign(Align::Center)
+         .margin_top(20)
+         .build();
+ 
     let new_folder_btn = Button::builder().label("New Folder +").build();
     let new_file_btn = Button::builder().label("New File +").build();
-
+ 
     creation_box.append(&new_folder_btn);
     creation_box.append(&new_file_btn);
 
     inspector_box.append(&info_label);
     inspector_box.append(&open_button);
     inspector_box.append(&creation_box);
+    // ... end existing right panel code ...
 
     // Assemble Paned
     paned.set_start_child(Some(&left_panel_container));
@@ -127,7 +172,21 @@ pub fn build(app: &Application) {
     // Shared State
     let selected_file_path: Rc<RefCell<Option<PathBuf>>> = Rc::new(RefCell::new(None));
 
-    // --- Logic: Toggle Hidden Files ---
+    // --- Logic Wiring ---
+    
+    // Places logic needs access to refresh_ui params.
+    // We need to pass closures to add_places_shortcuts or handle it differently.
+    // Refactor: Places need to update current_path and trigger refresh.
+    // The simple way: Store context in a struct or just re-bind closures (verbose but works).
+    
+    // Re-bind Places Shortcuts with Logic
+    // Actually, I'll clear `places_box` and re-build it? No, Places are static.
+    // But they need to trigger `refresh_ui`. 
+    // So I should build places AFTER I have all the clones ready.
+    
+    // Let's reorganize the build order slightly to access clones.
+
+    // --- Logic: Toggle Hidden ---
     let show_hidden_clone = show_hidden.clone();
     let nav_box_clone = nav_box.clone();
     let current_path_clone = current_path.clone();
@@ -135,7 +194,6 @@ pub fn build(app: &Application) {
     let info_label_clone = info_label.clone();
     let open_button_clone = open_button.clone();
     let selected_file_clone = selected_file_path.clone();
-    let show_hidden_ui_clone = show_hidden.clone(); // For recursive calls in refresh_ui
 
     hidden_toggle.connect_toggled(move |btn| {
         *show_hidden_clone.borrow_mut() = btn.is_active();
@@ -151,58 +209,138 @@ pub fn build(app: &Application) {
     });
 
     // --- Logic: Open File ---
-    let selected_file_clone = selected_file_path.clone();
+    let selected_file_clone_2 = selected_file_path.clone();
     open_button.connect_clicked(move |_| {
-        if let Some(path) = selected_file_clone.borrow().as_ref() {
-            if let Err(e) = open::that(path) {
-                eprintln!("Failed to open file: {}", e);
-            } else {
-                println!("Opening via Inspector: {:?}", path);
-            }
-        }
+         if let Some(path) = selected_file_clone_2.borrow().as_ref() {
+             if let Err(e) = open::that(path) {
+                 eprintln!("Failed to open file: {}", e);
+             } else {
+                 println!("Opening via Inspector: {:?}", path);
+             }
+         }
     });
 
-    // --- Logic: Create New Folder ---
-    setup_creation_popover(
-        &new_folder_btn,
-        "Folder Name...",
+    // --- Wiring Places Shortcuts ---
+    bind_places_logic(
+        &places_box,
         current_path.clone(),
         nav_box.clone(),
         window.clone(),
         info_label.clone(),
         open_button.clone(),
         selected_file_path.clone(),
-        true, // is_dir
         show_hidden.clone(),
     );
 
-    // --- Logic: Create New File ---
+    // --- Logic: Creation ---
     setup_creation_popover(
-        &new_file_btn,
-        "File Name...",
-        current_path.clone(),
-        nav_box.clone(),
-        window.clone(),
-        info_label.clone(),
-        open_button.clone(),
-        selected_file_path.clone(),
-        false, // is_dir
-        show_hidden.clone(),
+        &new_folder_btn, "Folder Name...", current_path.clone(), nav_box.clone(), window.clone(), info_label.clone(), open_button.clone(), selected_file_path.clone(), true, show_hidden.clone()
+    );
+    setup_creation_popover(
+        &new_file_btn, "File Name...", current_path.clone(), nav_box.clone(), window.clone(), info_label.clone(), open_button.clone(), selected_file_path.clone(), false, show_hidden.clone()
     );
 
-    // Render Initial State
-    refresh_ui(
-        &nav_box,
-        current_path,
-        &window,
-        &info_label,
-        &open_button,
-        selected_file_path,
-        show_hidden,
-    );
+    // Initial Render
+    refresh_ui(&nav_box, current_path, &window, &info_label, &open_button, selected_file_path, show_hidden);
 
     window.present();
 }
+
+fn setup_theme_popover(btn: &Button, popover: &Popover, provider: &CssProvider) {
+    popover.set_parent(btn);
+    let box_container = Box::builder()
+        .orientation(Orientation::Vertical)
+        .spacing(2)
+        .margin_top(6)
+        .margin_bottom(6)
+        .margin_start(6)
+        .margin_end(6)
+        .build();
+
+    let label = Label::builder().label("<b>Select Theme</b>").use_markup(true).margin_bottom(4).build();
+    box_container.append(&label);
+
+    for theme_name in themes::all_themes() {
+        let theme_btn = Button::builder()
+            .label(theme_name)
+            .has_frame(false)
+            .build();
+        
+        // Logic
+        let provider_clone = provider.clone();
+        let name = theme_name.to_string();
+        theme_btn.connect_clicked(move |_| {
+            provider_clone.load_from_data(themes::get_css(&name));
+        });
+
+        box_container.append(&theme_btn);
+    }
+
+    popover.set_child(Some(&box_container));
+
+    let popover_clone = popover.clone();
+    btn.connect_clicked(move |_| {
+        popover_clone.popup();
+    });
+}
+
+fn bind_places_logic(
+    container: &Box,
+    current_path: Rc<RefCell<PathBuf>>,
+    nav_box: Box,
+    window: ApplicationWindow,
+    info_label: Label,
+    open_button: Button,
+    selected_file_path: Rc<RefCell<Option<PathBuf>>>,
+    show_hidden: Rc<RefCell<bool>>,
+) {
+    let places = vec![
+        ("Start", dirs::home_dir()),
+        ("Desktop", dirs::desktop_dir()),
+        ("Documents", dirs::document_dir()),
+        ("Downloads", dirs::download_dir()),
+        ("Pictures", dirs::picture_dir()),
+        ("Music", dirs::audio_dir()),
+        ("Videos", dirs::video_dir()),
+    ];
+
+    for (name, path_opt) in places {
+        if let Some(path) = path_opt {
+            let btn = widgets::create_file_row(name, true); // Reusing create_row for consistent look
+            
+            // Clean up icon for places if possible? 
+            // widgets::create_file_row uses standard "folder" icon.
+            // We could improve this later with specific icons (user-desktop, folder-documents etc).
+            // For now, consistent style is fine.
+
+            let path_clone = path.clone();
+            
+            // Clones
+            let current_path = current_path.clone();
+            let nav_box = nav_box.clone();
+            let window = window.clone();
+            let info_label = info_label.clone();
+            let open_button = open_button.clone();
+            let selected_file_path = selected_file_path.clone();
+            let show_hidden = show_hidden.clone();
+
+            btn.connect_clicked(move |_| {
+                *current_path.borrow_mut() = path_clone.clone();
+                refresh_ui(
+                    &nav_box, 
+                    current_path.clone(), 
+                    &window, 
+                    &info_label, 
+                    &open_button, 
+                    selected_file_path.clone(),
+                    show_hidden.clone()
+                );
+            });
+            container.append(&btn);
+        }
+    }
+}
+
 
 // Helper to Attach Popover with Entry
 fn setup_creation_popover(
