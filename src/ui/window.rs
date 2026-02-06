@@ -1,58 +1,121 @@
 use crate::filesystem;
 use gtk4::prelude::*;
-use gtk4::{Application, ApplicationWindow, Box, Button, Orientation, ScrolledWindow};
+use gtk4::{
+    Align, Application, ApplicationWindow, Box, Button, Label, Orientation, Paned, ScrolledWindow,
+};
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
 pub fn build(app: &Application) {
-    // Determine start path (Home directory or fallback to current)
+    // Determine start path
     let start_path = dirs::home_dir().unwrap_or_else(|| std::env::current_dir().unwrap());
-
-    // Create a mutable shared state for the current path
     let current_path = Rc::new(RefCell::new(start_path));
 
-    // Create a window and set the title
+    // Main Window
     let window = ApplicationWindow::builder()
         .application(app)
-        .title("Diptych File Manager")
-        .default_width(800)
+        .title("Diptych Project")
+        .default_width(900)
         .default_height(600)
         .build();
 
-    // Create a vertical box to hold the file buttons
-    let content_box = Box::builder()
+    // --- Main Layout: Paned (Split View) ---
+    let paned = Paned::builder()
+        .orientation(Orientation::Horizontal)
+        .position(500) // Initial split position
+        .build();
+
+    // --- Left Panel: Navigation ---
+    let nav_box = Box::builder()
         .orientation(Orientation::Vertical)
         .spacing(2)
-        .margin_top(12)
-        .margin_bottom(12)
-        .margin_start(12)
-        .margin_end(12)
+        .margin_top(10)
+        .margin_bottom(10)
+        .margin_start(10)
+        .margin_end(10)
         .build();
 
-    // Add scroll capability
     let scrolled_window = ScrolledWindow::builder()
         .hscrollbar_policy(gtk4::PolicyType::Never)
-        .min_content_width(360)
-        .child(&content_box)
+        .min_content_width(300)
         .vexpand(true)
+        .child(&nav_box)
         .build();
 
-    // Main layout box (could add a path bar later)
-    let main_box = Box::builder().orientation(Orientation::Vertical).build();
+    // --- Right Panel: The "Inspector" ---
+    let inspector_box = Box::builder()
+        .orientation(Orientation::Vertical)
+        .spacing(12)
+        .margin_top(24)
+        .margin_bottom(24)
+        .margin_start(24)
+        .margin_end(24)
+        .hexpand(true)
+        .valign(Align::Center)
+        .build();
 
-    main_box.append(&scrolled_window);
-    window.set_child(Some(&main_box));
+    let info_label = Label::builder()
+        .label("<span size='x-large' weight='bold'>Diptych</span>\n<span color='gray'>Select a file to inspect</span>")
+        .use_markup(true)
+        .justify(gtk4::Justification::Center)
+        .wrap(true)
+        .build();
 
-    // Initial render
-    refresh_ui(&content_box, current_path, &window);
+    let action_button = Button::builder()
+        .label("Open")
+        .halign(Align::Center)
+        .sensitive(false) // Disabled until selection
+        .build();
 
-    // Present window
+    action_button.add_css_class("suggested-action"); // GTK theme accent style
+
+    inspector_box.append(&info_label);
+    inspector_box.append(&action_button);
+
+    // Assemble Paned
+    paned.set_start_child(Some(&scrolled_window));
+    paned.set_end_child(Some(&inspector_box));
+
+    window.set_child(Some(&paned));
+
+    // Shared State for the Action Button
+    let selected_file_path: Rc<RefCell<Option<PathBuf>>> = Rc::new(RefCell::new(None));
+
+    // Action Button Logic
+    let selected_file_clone = selected_file_path.clone();
+    action_button.connect_clicked(move |_| {
+        if let Some(path) = selected_file_clone.borrow().as_ref() {
+            if let Err(e) = open::that(path) {
+                eprintln!("Failed to open file: {}", e);
+            } else {
+                println!("Opening via Inspector: {:?}", path);
+            }
+        }
+    });
+
+    // Render Initial State
+    refresh_ui(
+        &nav_box,
+        current_path,
+        &window,
+        &info_label,
+        &action_button,
+        selected_file_path,
+    );
+
     window.present();
 }
 
-fn refresh_ui(container: &Box, current_path: Rc<RefCell<PathBuf>>, window: &ApplicationWindow) {
-    // Clear existing children
+fn refresh_ui(
+    container: &Box,
+    current_path: Rc<RefCell<PathBuf>>,
+    window: &ApplicationWindow,
+    info_label: &Label,
+    action_button: &Button,
+    selected_file_path: Rc<RefCell<Option<PathBuf>>>,
+) {
+    // Clear list
     while let Some(child) = container.first_child() {
         container.remove(&child);
     }
@@ -60,23 +123,37 @@ fn refresh_ui(container: &Box, current_path: Rc<RefCell<PathBuf>>, window: &Appl
     let path = current_path.borrow();
     window.set_title(Some(&format!("Diptych - {}", path.to_string_lossy())));
 
-    // Add ".." button to go up if we are not at root
+    // Re-disable action button on nav change
+    action_button.set_sensitive(false);
+    *selected_file_path.borrow_mut() = None;
+    info_label.set_markup("<span size='large'>Browsing...</span>");
+
+    // "Go Up" Button
     if let Some(parent) = path.parent() {
         let parent_path = parent.to_path_buf();
         let up_button = Button::builder()
-            .label(".. (Go Up)")
-            .halign(gtk4::Align::Fill)
+            .label("⬆️ Go Up")
+            .halign(Align::Fill)
             .build();
 
         let path_clone = current_path.clone();
         let container_clone = container.clone();
         let window_clone = window.clone();
+        let info_clone = info_label.clone();
+        let action_clone = action_button.clone();
+        let selected_clone = selected_file_path.clone();
 
         up_button.connect_clicked(move |_| {
             *path_clone.borrow_mut() = parent_path.clone();
-            refresh_ui(&container_clone, path_clone.clone(), &window_clone);
+            refresh_ui(
+                &container_clone,
+                path_clone.clone(),
+                &window_clone,
+                &info_clone,
+                &action_clone,
+                selected_clone.clone(),
+            );
         });
-
         container.append(&up_button);
     }
 
@@ -91,36 +168,55 @@ fn refresh_ui(container: &Box, current_path: Rc<RefCell<PathBuf>>, window: &Appl
 
         let button = Button::builder()
             .label(&label_text)
-            .halign(gtk4::Align::Fill) // Fill the width
-            .has_frame(false) // Flat look
+            .halign(Align::Fill)
+            .has_frame(false)
             .build();
 
-        // Align label inside button to the left
         if let Some(child) = button.child() {
             if let Some(label) = child.downcast_ref::<gtk4::Label>() {
                 label.set_xalign(0.0);
             }
         }
 
-        if entry.is_dir {
-            let path_clone = current_path.clone();
-            let container_clone = container.clone();
-            let new_path = entry.path.clone();
-            let window_clone = window.clone();
+        let entry_path = entry.path.clone();
 
+        // Clones for closures
+        let path_clone = current_path.clone();
+        let container_clone = container.clone();
+        let window_clone = window.clone();
+        let info_clone = info_label.clone();
+        let action_clone = action_button.clone();
+        let selected_clone = selected_file_path.clone();
+
+        if entry.is_dir {
+            // Dirs: Navigate immmedeately
             button.connect_clicked(move |_| {
-                *path_clone.borrow_mut() = new_path.clone();
-                refresh_ui(&container_clone, path_clone.clone(), &window_clone);
+                *path_clone.borrow_mut() = entry_path.clone();
+                refresh_ui(
+                    &container_clone,
+                    path_clone.clone(),
+                    &window_clone,
+                    &info_clone,
+                    &action_clone,
+                    selected_clone.clone(),
+                );
             });
         } else {
-            // File click logic: Open with default system app
-            let file_path = entry.path.clone();
+            // Files: Select & Inspect
+            let name_clone = entry.name.clone();
             button.connect_clicked(move |_| {
-                if let Err(e) = open::that(&file_path) {
-                    eprintln!("Failed to open file: {}", e);
-                } else {
-                    println!("Opening file: {:?}", file_path);
-                }
+                // Update Inspector UI
+                let markup = format!(
+                    "<span size='xx-large' weight='bold'>{}</span>\n\n<span color='gray'>Type: File</span>\n<span color='gray'>Path: {}</span>",
+                    name_clone,
+                    entry_path.to_string_lossy()
+                );
+                info_clone.set_markup(&markup);
+
+                // Update Action Button
+                action_clone.set_sensitive(true);
+                action_clone.set_label("Open File");
+                *selected_clone.borrow_mut() = Some(entry_path.clone());
             });
         }
 
