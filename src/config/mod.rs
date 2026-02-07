@@ -5,4 +5,4 @@ pub mod persistence;
 pub mod types;
 
 // Re-export most commonly used items for convenience.
-pub use types::{AppConfig, GroupBy, ViewMode};
+pub use types::{AppConfig, GroupBy, IconTheme, ViewMode};

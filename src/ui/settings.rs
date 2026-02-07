@@ -1,4 +1,4 @@
-use crate::config::{AppConfig, GroupBy, ViewMode};
+use crate::config::{AppConfig, GroupBy, IconTheme, ViewMode};
 use crate::core::Theme;
 use gtk4::prelude::*;
 use gtk4::{
@@ -95,6 +95,8 @@ pub fn build_settings_panel(
             .width_chars(5)
             .build();
 
+        // Update label and apply live, but DON'T save to disk on every tick.
+        // Config is persisted on window close or when another setting changes.
         let config_c = config.clone();
         let on_change_c = on_change.clone();
         let size_label_c = size_label.clone();
@@ -102,9 +104,9 @@ pub fn build_settings_panel(
             let val = s.value() as i32;
             config_c.borrow_mut().icon_size = val;
             size_label_c.set_label(&format!("{}px", val));
-            config_c.borrow().save();
             on_change_c();
         });
+
         row.append(&scale);
         row.append(&size_label);
         panel.append(&row);
@@ -113,11 +115,12 @@ pub fn build_settings_panel(
     // View mode toggle
     {
         let row = setting_row("View Mode");
-        let modes = StringList::new(&["Grid", "List"]);
+        let modes = StringList::new(&["Grid", "List", "Graph"]);
         let dropdown = DropDown::builder().model(&modes).build();
         dropdown.set_selected(match config.borrow().view_mode {
             ViewMode::Grid => 0,
             ViewMode::List => 1,
+            ViewMode::Graph => 2,
         });
 
         let config_c = config.clone();
@@ -125,10 +128,41 @@ pub fn build_settings_panel(
         dropdown.connect_selected_notify(move |dd| {
             config_c.borrow_mut().view_mode = match dd.selected() {
                 0 => ViewMode::Grid,
-                _ => ViewMode::List,
+                1 => ViewMode::List,
+                _ => ViewMode::Graph,
             };
             config_c.borrow().save();
             on_change_c();
+        });
+        row.append(&dropdown);
+        panel.append(&row);
+    }
+
+    // Icon theme selector
+    {
+        let row = setting_row("Icon Theme");
+        let theme_names = IconTheme::all_names();
+        let string_list = StringList::new(&theme_names);
+        let dropdown = DropDown::builder().model(&string_list).build();
+
+        let current_icon_theme = config.borrow().icon_theme.display_name();
+        for (i, name) in theme_names.iter().enumerate() {
+            if *name == current_icon_theme {
+                dropdown.set_selected(i as u32);
+                break;
+            }
+        }
+
+        let config_c = config.clone();
+        let on_change_c = on_change.clone();
+        dropdown.connect_selected_notify(move |dd| {
+            let idx = dd.selected() as usize;
+            let names = IconTheme::all_names();
+            if let Some(name) = names.get(idx) {
+                config_c.borrow_mut().icon_theme = IconTheme::from_name(name);
+                config_c.borrow().save();
+                on_change_c();
+            }
         });
         row.append(&dropdown);
         panel.append(&row);

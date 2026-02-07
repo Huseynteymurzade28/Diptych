@@ -421,13 +421,14 @@ window {{
     color: {fg_primary};
     border-radius: 12px;
     padding: 8px 16px;
-    font-weight: 500;
-    border: 1px solid {border};
+    font-weight: 600;
+    border: 1px solid {border_hover};
     transition: all 150ms ease;
 }}
 .btn-secondary:hover {{
     background-color: {bg_hover};
-    border-color: {border_hover};
+    border-color: {accent};
+    color: {fg_primary};
 }}
 
 /* ── Entries ── */
@@ -516,6 +517,125 @@ switch:checked {{
     border-radius: 16px;
     padding: 16px;
 }}
+
+/* ── Context Menu ── */
+.context-menu {{
+    background-color: {bg_base};
+    border: 1px solid {border};
+    border-radius: 14px;
+}}
+.context-menu-item {{
+    border-radius: 8px;
+    padding: 6px 12px;
+    background: transparent;
+    color: {fg_primary};
+    border: none;
+    font-size: 13px;
+    transition: background 150ms ease;
+}}
+.context-menu-item:hover {{
+    background-color: {bg_overlay};
+}}
+
+/* ── Creation Popover Buttons ── */
+.creation-btn {{
+    font-weight: 700;
+    font-size: 13px;
+    min-width: 60px;
+    padding: 8px 18px;
+    letter-spacing: 0.3px;
+}}
+
+.context-menu-danger {{
+    color: #f38ba8;
+}}
+.context-menu-danger:hover {{
+    background-color: rgba(243, 139, 168, 0.15);
+}}
+.context-menu-title {{
+    font-size: 12px;
+    font-weight: 700;
+    color: {accent};
+    margin-bottom: 4px;
+}}
+
+/* ── Hamburger Menu ── */
+.hamburger-title {{
+    font-size: 14px;
+    font-weight: 700;
+    color: {accent};
+    letter-spacing: 0.5px;
+}}
+
+/* ── Graph View ── */
+.graph-view {{
+    background-color: {bg_base};
+}}
+
+/* ── Media Preview ── */
+.preview-container {{
+    padding: 16px;
+    background-color: {bg_overlay};
+    border-radius: 14px;
+    border: 1px solid {border};
+}}
+.preview-image {{
+    border-radius: 10px;
+}}
+.preview-loading-label {{
+    font-size: 12px;
+    color: {fg_muted};
+}}
+.preview-dimension-label {{
+    font-size: 10px;
+    color: {fg_muted};
+    margin-top: 4px;
+}}
+.preview-error-label {{
+    font-size: 12px;
+    color: #f38ba8;
+}}
+.preview-video-placeholder {{
+    padding: 24px;
+    background-color: {bg_overlay};
+    border-radius: 14px;
+    border: 1px solid {border};
+}}
+.preview-play-icon {{
+    color: {accent};
+    opacity: 0.8;
+}}
+.preview-video-name {{
+    font-size: 13px;
+    font-weight: 600;
+    color: {fg_primary};
+}}
+.preview-hint-label {{
+    font-size: 10px;
+    color: {fg_muted};
+}}
+.preview-tooltip-image {{
+    border-radius: 6px;
+}}
+
+/* ── Icon Color Classes (Colorful theme) ── */
+.icon-folder {{ color: {accent}; }}
+.icon-rust {{ color: #fab387; }}
+.icon-python {{ color: #89b4fa; }}
+.icon-js {{ color: #f9e2af; }}
+.icon-c {{ color: #74c7ec; }}
+.icon-java {{ color: #f38ba8; }}
+.icon-go {{ color: #a6e3a1; }}
+.icon-script {{ color: #cba6f7; }}
+.icon-image {{ color: #a6e3a1; }}
+.icon-audio {{ color: #cba6f7; }}
+.icon-video {{ color: #f38ba8; }}
+.icon-archive {{ color: #f9e2af; }}
+.icon-pdf {{ color: #eba0ac; }}
+.icon-web {{ color: #94e2d5; }}
+.icon-text {{ color: {fg_muted}; }}
+.icon-config {{ color: #94e2d5; }}
+.icon-default {{ color: {fg_secondary}; }}
 "#,
             bg_base = p.bg_base,
             bg_surface = p.bg_surface,

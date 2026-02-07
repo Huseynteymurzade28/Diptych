@@ -17,6 +17,7 @@ use crate::ui::content::refresh_content;
 // ═══════════════════════════════════════════════
 
 /// Builds the complete sidebar widget (toolbar + places + file browser).
+/// Returns (sidebar_widget, nav_box, settings_toggle).
 pub fn build_sidebar(
     current_path: Rc<RefCell<PathBuf>>,
     selected_file_path: Rc<RefCell<Option<PathBuf>>>,
@@ -27,7 +28,7 @@ pub fn build_sidebar(
     inspector_info: Label,
     window: ApplicationWindow,
     css_provider: gtk4::CssProvider,
-) -> (Box, Box) {
+) -> (Box, Box, ToggleButton) {
     let sidebar = Box::builder()
         .orientation(Orientation::Vertical)
         .css_classes(vec!["sidebar".to_string()])
@@ -201,7 +202,7 @@ pub fn build_sidebar(
         });
     }
 
-    (sidebar, nav_box)
+    (sidebar, nav_box, settings_toggle)
 }
 
 // ═══════════════════════════════════════════════
@@ -284,7 +285,9 @@ fn setup_creation_popover(
     selected_file_path: Rc<RefCell<Option<PathBuf>>>,
     config: Rc<RefCell<AppConfig>>,
 ) {
-    let popover = Popover::builder().build();
+    let popover = Popover::builder()
+        .css_classes(vec!["context-menu".to_string()])
+        .build();
     popover.set_parent(parent_btn);
 
     let pop_box = Box::builder()
@@ -296,6 +299,13 @@ fn setup_creation_popover(
         .margin_end(8)
         .build();
 
+    // Title label for clarity
+    let title_label = Label::builder()
+        .label("Create New")
+        .css_classes(vec!["context-menu-title".to_string()])
+        .halign(Align::Start)
+        .build();
+
     let entry = gtk4::Entry::builder().placeholder_text("Name…").build();
 
     let btn_row = Box::builder()
@@ -305,18 +315,22 @@ fn setup_creation_popover(
         .build();
 
     let create_file_btn = Button::builder()
-        .label("File")
-        .css_classes(vec!["btn-secondary".to_string()])
+        .label("  File  ")
+        .css_classes(vec![
+            "btn-secondary".to_string(),
+            "creation-btn".to_string(),
+        ])
         .build();
 
     let create_folder_btn = Button::builder()
-        .label("Folder")
-        .css_classes(vec!["btn-primary".to_string()])
+        .label("  Folder  ")
+        .css_classes(vec!["btn-primary".to_string(), "creation-btn".to_string()])
         .build();
 
     btn_row.append(&create_file_btn);
     btn_row.append(&create_folder_btn);
 
+    pop_box.append(&title_label);
     pop_box.append(&entry);
     pop_box.append(&btn_row);
     popover.set_child(Some(&pop_box));

@@ -1,6 +1,6 @@
 use crate::config::{AppConfig, ViewMode};
 use crate::core::Theme;
-use crate::ui::{content, inspector, sidebar};
+use crate::ui::{content, context_menu, graph_view, hamburger, inspector, sidebar};
 use gtk4::prelude::*;
 use gtk4::{
     Align, Application, ApplicationWindow, Box, Button, CssProvider, Label, Orientation, Paned,
@@ -18,7 +18,9 @@ pub fn build(app: &Application) {
     // ── Load persisted config ──
     let config = Rc::new(RefCell::new(AppConfig::load()));
 
-    let start_path = dirs::home_dir().unwrap_or_else(|| std::env::current_dir().unwrap());
+    let start_path = dirs::home_dir()
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| PathBuf::from("/"));
     let current_path = Rc::new(RefCell::new(start_path));
     let selected_file_path: Rc<RefCell<Option<PathBuf>>> = Rc::new(RefCell::new(None));
 
@@ -96,13 +98,19 @@ pub fn build(app: &Application) {
 
     let view_toggle_btn = Button::builder()
         .icon_name("view-grid-symbolic")
-        .tooltip_text("Toggle View Mode")
+        .tooltip_text("Toggle View Mode (Grid / List / Graph)")
         .css_classes(vec!["toolbar-btn".to_string()])
         .build();
 
     header_bar.append(&go_up_btn);
     header_bar.append(&breadcrumb_label);
     header_bar.append(&view_toggle_btn);
+
+    // ── Hamburger menu (right-most) ──
+    // Placeholder — will be fully wired after sidebar is built
+    let hamburger_placeholder = Box::builder().build();
+    header_bar.append(&hamburger_placeholder);
+
     right_vbox.append(&header_bar);
 
     // Content area
@@ -129,7 +137,7 @@ pub fn build(app: &Application) {
     right_vbox.append(&inspector_bar);
 
     // ── Left side: Sidebar ──
-    let (sidebar_widget, nav_box) = sidebar::build_sidebar(
+    let (sidebar_widget, nav_box, settings_toggle) = sidebar::build_sidebar(
         current_path.clone(),
         selected_file_path.clone(),
         config.clone(),
@@ -196,23 +204,35 @@ pub fn build(app: &Application) {
                 let mut cfg = config_c.borrow_mut();
                 cfg.view_mode = match cfg.view_mode {
                     ViewMode::Grid => ViewMode::List,
-                    ViewMode::List => ViewMode::Grid,
+                    ViewMode::List => ViewMode::Graph,
+                    ViewMode::Graph => ViewMode::Grid,
                 };
                 cfg.save();
             }
             let icon = match config_c.borrow().view_mode {
                 ViewMode::Grid => "view-grid-symbolic",
                 ViewMode::List => "view-list-symbolic",
+                ViewMode::Graph => "network-workgroup-symbolic",
             };
             view_btn_c.set_icon_name(icon);
 
-            content::refresh_content(
-                &content_box_c,
-                current_path_c.clone(),
-                &inspector_info_c,
-                selected_c.clone(),
-                config_c.clone(),
-            );
+            // For Graph mode, replace content with graph view
+            if config_c.borrow().view_mode == ViewMode::Graph {
+                // Clear content box and show graph
+                while let Some(child) = content_box_c.first_child() {
+                    content_box_c.remove(&child);
+                }
+                let graph = graph_view::build_graph_view(current_path_c.clone(), config_c.clone());
+                content_box_c.append(&graph);
+            } else {
+                content::refresh_content(
+                    &content_box_c,
+                    current_path_c.clone(),
+                    &inspector_info_c,
+                    selected_c.clone(),
+                    config_c.clone(),
+                );
+            }
         });
     }
 
@@ -223,8 +243,43 @@ pub fn build(app: &Application) {
         let icon = match config.borrow().view_mode {
             ViewMode::Grid => "view-grid-symbolic",
             ViewMode::List => "view-list-symbolic",
+            ViewMode::Graph => "network-workgroup-symbolic",
         };
         view_toggle_btn.set_icon_name(icon);
+    }
+
+    // ── Hamburger menu (wired after sidebar) ──
+    {
+        let config_c = config.clone();
+        let cp_c = current_path.clone();
+        let cb_c = content_box.clone();
+        let info_c = inspector_info.clone();
+        let sel_c = selected_file_path.clone();
+
+        // Wire settings toggle from sidebar into hamburger "Settings" button
+        let settings_toggle_c = settings_toggle.clone();
+        let on_open_settings: Rc<dyn Fn()> = Rc::new(move || {
+            // Activate the sidebar settings toggle (if not already active)
+            if !settings_toggle_c.is_active() {
+                settings_toggle_c.set_active(true);
+            }
+        });
+
+        let hamburger_btn =
+            hamburger::build_hamburger_menu(config_c, cp_c, cb_c, info_c, sel_c, on_open_settings);
+        hamburger_placeholder.append(&hamburger_btn);
+    }
+
+    // ── Attach background right-click context menu to content area ──
+    {
+        context_menu::attach_background_context_menu(
+            &content_box,
+            current_path.clone(),
+            content_box.clone(),
+            inspector_info.clone(),
+            selected_file_path.clone(),
+            config.clone(),
+        );
     }
 
     sidebar::refresh_all(

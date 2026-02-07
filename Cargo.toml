@@ -11,3 +11,9 @@ open = "5.3.3"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 chrono = "0.4"
+
+# Async thumbnail generation (media previews)
+gio = "0.21"
+
+# Graph view rendering (force-directed graph)
+rand = "0.8"

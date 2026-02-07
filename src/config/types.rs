@@ -1,5 +1,37 @@
 use serde::{Deserialize, Serialize};
 
+// ─── Icon Theme ───
+
+/// Determines which icon set to use for file/folder display.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum IconTheme {
+    Minimal,
+    Colorful,
+    Outline,
+}
+
+impl IconTheme {
+    pub fn all_names() -> Vec<&'static str> {
+        vec!["Minimal", "Colorful", "Outline"]
+    }
+
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            IconTheme::Minimal => "Minimal",
+            IconTheme::Colorful => "Colorful",
+            IconTheme::Outline => "Outline",
+        }
+    }
+
+    pub fn from_name(name: &str) -> IconTheme {
+        match name {
+            "Colorful" => IconTheme::Colorful,
+            "Outline" => IconTheme::Outline,
+            _ => IconTheme::Minimal,
+        }
+    }
+}
+
 // ─── Grouping Strategy ───
 
 /// Determines how files are grouped in the content view.
@@ -13,11 +45,12 @@ pub enum GroupBy {
 
 // ─── View Mode ───
 
-/// Switches between grid (card) and list (row) layouts.
+/// Switches between grid (card), list (row), and graph (node) layouts.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ViewMode {
     Grid,
     List,
+    Graph,
 }
 
 // ─── Application Config ───
@@ -29,6 +62,7 @@ pub struct AppConfig {
     pub theme: String,
     pub icon_size: i32,
     pub view_mode: ViewMode,
+    pub icon_theme: IconTheme,
 
     // Metadata display
     pub show_hidden: bool,
@@ -49,6 +83,7 @@ impl Default for AppConfig {
             theme: "Catppuccin".to_string(),
             icon_size: 48,
             view_mode: ViewMode::Grid,
+            icon_theme: IconTheme::Minimal,
             show_hidden: false,
             show_file_size: true,
             show_modified_date: true,

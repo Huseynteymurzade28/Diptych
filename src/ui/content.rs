@@ -1,6 +1,6 @@
 use crate::config::{AppConfig, GroupBy, ViewMode};
 use crate::filesystem;
-use crate::ui::widgets;
+use crate::ui::{context_menu, graph_view, preview, widgets};
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Button, FlowBox, Label};
 use std::cell::RefCell;
@@ -26,6 +26,13 @@ pub fn refresh_content(
 
     let path = current_path.borrow().clone();
     let cfg = config.borrow().clone();
+
+    // Graph mode gets its own special view
+    if cfg.view_mode == ViewMode::Graph {
+        let graph = graph_view::build_graph_view(current_path.clone(), config.clone());
+        container.append(&graph);
+        return;
+    }
 
     let files = filesystem::list_directory(&path, cfg.show_hidden);
 
@@ -87,6 +94,10 @@ pub fn refresh_content(
                     container.append(&row);
                 }
             }
+            ViewMode::Graph => {
+                // Graph mode is handled at the top of refresh_content
+                unreachable!("Graph mode should be handled before grouping");
+            }
         }
     }
 
@@ -128,19 +139,54 @@ fn wire_content_click(
     let sel = selected_file_path.clone();
     let cfg = config.clone();
 
+    // Left-click: navigate or open + show preview
+    let entry_path_click = entry_path.clone();
+    let info_click = info.clone();
+    let sel_click = sel.clone();
     btn.connect_clicked(move |_| {
         if is_dir {
-            *cp.borrow_mut() = entry_path.clone();
-            refresh_content(&cont, cp.clone(), &info, sel.clone(), cfg.clone());
+            *cp.borrow_mut() = entry_path_click.clone();
+            refresh_content(
+                &cont,
+                cp.clone(),
+                &info_click,
+                sel_click.clone(),
+                cfg.clone(),
+            );
         } else {
-            info.set_label(&format!(
+            info_click.set_label(&format!(
                 "{}  •  {}  •  {}",
                 name, size_display, mod_display
             ));
-            *sel.borrow_mut() = Some(entry_path.clone());
-            if let Err(e) = open::that(&entry_path) {
+            *sel_click.borrow_mut() = Some(entry_path_click.clone());
+            if let Err(e) = open::that(&entry_path_click) {
                 eprintln!("Failed to open file: {}", e);
             }
         }
     });
+
+    // Right-click context menu (Rename, Delete, Open)
+    context_menu::attach_file_context_menu(
+        btn,
+        entry.path.clone(),
+        entry.name.clone(),
+        current_path.clone(),
+        container.clone(),
+        inspector_info.clone(),
+        selected_file_path.clone(),
+        config.clone(),
+    );
+
+    // Hover tooltip with image preview for supported formats
+    if preview::supports_preview(&entry.path) {
+        let entry_path_tooltip = entry.path.clone();
+        btn.set_has_tooltip(true);
+        btn.connect_query_tooltip(move |_widget, _x, _y, _keyboard, tooltip| {
+            if let Some(preview_img) = preview::build_tooltip_preview(&entry_path_tooltip) {
+                tooltip.set_custom(Some(&preview_img));
+                return true;
+            }
+            false
+        });
+    }
 }

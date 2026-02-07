@@ -1,6 +1,6 @@
-use crate::config::AppConfig;
+use crate::config::{AppConfig, IconTheme};
 use crate::filesystem::Entry;
-use crate::ui::widgets::icon::icon_for_entry;
+use crate::ui::widgets::icon::{icon_css_class, icon_for_entry_themed};
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Button, Image, Label, Orientation};
 
@@ -10,7 +10,7 @@ use gtk4::{Align, Box, Button, Image, Label, Orientation};
 
 /// Creates a compact list-row widget.
 pub fn create_file_row(entry: &Entry, config: &AppConfig) -> Button {
-    let icon_name = icon_for_entry(entry);
+    let icon_name = icon_for_entry_themed(entry, &config.icon_theme);
     let icon_sz = (config.icon_size / 3).max(16).min(24);
 
     let container = Box::builder()
@@ -18,9 +18,17 @@ pub fn create_file_row(entry: &Entry, config: &AppConfig) -> Button {
         .spacing(10)
         .build();
 
+    // Only apply color tinting for the Colorful icon theme
+    let icon_classes = if config.icon_theme == IconTheme::Colorful {
+        vec![icon_css_class(entry).to_string()]
+    } else {
+        vec![]
+    };
+
     let icon = Image::builder()
         .icon_name(icon_name)
         .pixel_size(icon_sz)
+        .css_classes(icon_classes)
         .build();
 
     let name_label = Label::builder()

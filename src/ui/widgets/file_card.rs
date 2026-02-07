@@ -1,6 +1,6 @@
-use crate::config::AppConfig;
+use crate::config::{AppConfig, IconTheme};
 use crate::filesystem::Entry;
-use crate::ui::widgets::icon::icon_for_entry;
+use crate::ui::widgets::icon::{icon_css_class, icon_for_entry_themed};
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Button, Image, Label, Orientation};
 
@@ -10,7 +10,7 @@ use gtk4::{Align, Box, Button, Image, Label, Orientation};
 
 /// Creates a card-style widget for grid view.
 pub fn create_file_card(entry: &Entry, config: &AppConfig) -> Button {
-    let icon_name = icon_for_entry(entry);
+    let icon_name = icon_for_entry_themed(entry, &config.icon_theme);
 
     let card_box = Box::builder()
         .orientation(Orientation::Vertical)
@@ -19,10 +19,18 @@ pub fn create_file_card(entry: &Entry, config: &AppConfig) -> Button {
         .valign(Align::Center)
         .build();
 
+    // Only apply color tinting for the Colorful icon theme
+    let icon_classes = if config.icon_theme == IconTheme::Colorful {
+        vec![icon_css_class(entry).to_string()]
+    } else {
+        vec![]
+    };
+
     let icon = Image::builder()
         .icon_name(icon_name)
         .pixel_size(config.icon_size)
         .halign(Align::Center)
+        .css_classes(icon_classes)
         .build();
 
     let name_label = Label::builder()
