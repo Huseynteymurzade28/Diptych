@@ -636,6 +636,120 @@ switch:checked {{
 .icon-text {{ color: {fg_muted}; }}
 .icon-config {{ color: #94e2d5; }}
 .icon-default {{ color: {fg_secondary}; }}
+
+/* ── Tree View ── */
+.tree-view-container {{
+    padding: 2px 4px;
+}}
+
+.tree-row-btn {{
+    border-radius: 8px;
+    padding: 1px 8px 1px 2px;
+    margin: 0px 4px;
+    min-height: 30px;
+    background: transparent;
+    color: {fg_primary};
+    border: none;
+    transition: background 120ms ease, border-color 120ms ease;
+}}
+.tree-row-btn:hover {{
+    background-color: {bg_overlay};
+}}
+.tree-row-selected {{
+    background-color: {bg_overlay};
+    border: 1px solid {border_hover};
+}}
+.tree-row-selected:hover {{
+    background-color: {bg_hover};
+}}
+
+/* Guide lines — subtle vertical bars for nesting */
+.tree-guide-line {{
+    border-left: 1px solid {border};
+    margin-left: 10px;
+    min-width: 1px;
+}}
+.tree-guide-spacer {{
+    min-width: 20px;
+}}
+
+/* Disclosure arrow */
+.tree-arrow {{
+    min-width: 22px;
+    min-height: 22px;
+    padding: 0px;
+    margin: 0px;
+    border-radius: 6px;
+    font-size: 11px;
+    color: {fg_muted};
+    background: transparent;
+    border: none;
+    transition: color 120ms ease, background 120ms ease;
+}}
+.tree-arrow:hover {{
+    color: {accent};
+    background-color: {bg_hover};
+}}
+.tree-arrow-open {{
+    color: {accent};
+}}
+
+/* File dot (leaf node indicator) */
+.tree-file-dot {{
+    font-size: 8px;
+    color: {fg_muted};
+    opacity: 0.4;
+    min-width: 22px;
+}}
+
+/* Icon styling */
+.tree-icon {{
+    opacity: 0.9;
+}}
+.tree-icon-folder {{
+    color: {accent};
+}}
+
+/* Name labels */
+.tree-name {{
+    font-size: 13px;
+}}
+.tree-name-dir {{
+    font-weight: 600;
+    color: {fg_primary};
+}}
+.tree-name-file {{
+    font-weight: 400;
+    color: {fg_subtle};
+}}
+
+/* Child count badge for directories */
+.tree-badge {{
+    font-size: 9px;
+    font-weight: 700;
+    color: {fg_muted};
+    background-color: {bg_overlay};
+    border-radius: 99px;
+    padding: 1px 7px;
+    margin-right: 2px;
+    min-height: 16px;
+}}
+
+/* File size metadata */
+.tree-meta {{
+    font-size: 10px;
+    color: {fg_muted};
+    margin-right: 4px;
+}}
+
+/* Empty directory hint */
+.tree-empty-hint {{
+    font-size: 11px;
+    font-style: italic;
+    color: {fg_muted};
+    opacity: 0.5;
+    padding: 2px 0px;
+}}
 "#,
             bg_base = p.bg_base,
             bg_surface = p.bg_surface,

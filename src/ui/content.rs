@@ -1,6 +1,6 @@
 use crate::config::{AppConfig, GroupBy, ViewMode};
 use crate::filesystem;
-use crate::ui::{context_menu, graph_view, preview, widgets};
+use crate::ui::{context_menu, graph_view, preview, tree_view, widgets};
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Button, FlowBox, Label};
 use std::cell::RefCell;
@@ -31,6 +31,36 @@ pub fn refresh_content(
     if cfg.view_mode == ViewMode::Graph {
         let graph = graph_view::build_graph_view(current_path.clone(), config.clone());
         container.append(&graph);
+        return;
+    }
+
+    // Tree mode: hierarchical expand/collapse view
+    if cfg.view_mode == ViewMode::Tree {
+        let cp = current_path.clone();
+        let cont = container.clone();
+        let info = inspector_info.clone();
+        let sel = selected_file_path.clone();
+        let cfg_rc = config.clone();
+
+        let on_navigate: Rc<dyn Fn(PathBuf)> = Rc::new(move |new_path: PathBuf| {
+            *cp.borrow_mut() = new_path;
+            refresh_content(
+                &cont,
+                cp.clone(),
+                &info,
+                sel.clone(),
+                cfg_rc.clone(),
+            );
+        });
+
+        let tree = tree_view::build_tree_view(
+            current_path.clone(),
+            config.clone(),
+            inspector_info,
+            selected_file_path.clone(),
+            on_navigate,
+        );
+        container.append(&tree);
         return;
     }
 
@@ -97,6 +127,10 @@ pub fn refresh_content(
             ViewMode::Graph => {
                 // Graph mode is handled at the top of refresh_content
                 unreachable!("Graph mode should be handled before grouping");
+            }
+            ViewMode::Tree => {
+                // Tree mode is handled at the top of refresh_content
+                unreachable!("Tree mode should be handled before grouping");
             }
         }
     }

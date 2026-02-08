@@ -205,7 +205,8 @@ pub fn build(app: &Application) {
                 cfg.view_mode = match cfg.view_mode {
                     ViewMode::Grid => ViewMode::List,
                     ViewMode::List => ViewMode::Graph,
-                    ViewMode::Graph => ViewMode::Grid,
+                    ViewMode::Graph => ViewMode::Tree,
+                    ViewMode::Tree => ViewMode::Grid,
                 };
                 cfg.save();
             }
@@ -213,6 +214,7 @@ pub fn build(app: &Application) {
                 ViewMode::Grid => "view-grid-symbolic",
                 ViewMode::List => "view-list-symbolic",
                 ViewMode::Graph => "network-workgroup-symbolic",
+                ViewMode::Tree => "view-list-tree-symbolic",
             };
             view_btn_c.set_icon_name(icon);
 
@@ -244,6 +246,7 @@ pub fn build(app: &Application) {
             ViewMode::Grid => "view-grid-symbolic",
             ViewMode::List => "view-list-symbolic",
             ViewMode::Graph => "network-workgroup-symbolic",
+            ViewMode::Tree => "view-list-tree-symbolic",
         };
         view_toggle_btn.set_icon_name(icon);
     }

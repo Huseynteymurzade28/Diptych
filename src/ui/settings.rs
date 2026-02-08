@@ -115,12 +115,13 @@ pub fn build_settings_panel(
     // View mode toggle
     {
         let row = setting_row("View Mode");
-        let modes = StringList::new(&["Grid", "List", "Graph"]);
+        let modes = StringList::new(&["Grid", "List", "Graph", "Tree"]);
         let dropdown = DropDown::builder().model(&modes).build();
         dropdown.set_selected(match config.borrow().view_mode {
             ViewMode::Grid => 0,
             ViewMode::List => 1,
             ViewMode::Graph => 2,
+            ViewMode::Tree => 3,
         });
 
         let config_c = config.clone();
@@ -129,7 +130,8 @@ pub fn build_settings_panel(
             config_c.borrow_mut().view_mode = match dd.selected() {
                 0 => ViewMode::Grid,
                 1 => ViewMode::List,
-                _ => ViewMode::Graph,
+                2 => ViewMode::Graph,
+                _ => ViewMode::Tree,
             };
             config_c.borrow().save();
             on_change_c();

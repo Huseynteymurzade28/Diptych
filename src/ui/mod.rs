@@ -9,5 +9,6 @@ pub mod inspector;
 pub mod preview;
 pub mod settings;
 pub mod sidebar;
+pub mod tree_view;
 pub mod widgets;
 pub mod window;

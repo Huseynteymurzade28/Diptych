@@ -45,12 +45,13 @@ pub enum GroupBy {
 
 // ─── View Mode ───
 
-/// Switches between grid (card), list (row), and graph (node) layouts.
+/// Switches between grid (card), list (row), graph (node), and tree (hierarchy) layouts.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ViewMode {
     Grid,
     List,
     Graph,
+    Tree,
 }
 
 // ─── Application Config ───

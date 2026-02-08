@@ -1,10 +1,45 @@
 use std::path::Path;
 use std::process::Command;
+use std::sync::OnceLock;
 
 use image::imageops::FilterType;
 use image::ImageReader;
 
 use super::{THUMB_HEIGHT, THUMB_WIDTH};
+
+// ═══════════════════════════════════════════════
+//  FFmpeg Availability Check
+// ═══════════════════════════════════════════════
+
+/// Cached result of whether `ffmpeg` is reachable on $PATH.
+/// Checked once per process lifetime — avoids spawning a failing
+/// process for every single video file in a large directory.
+static FFMPEG_AVAILABLE: OnceLock<bool> = OnceLock::new();
+
+/// Probes for `ffmpeg` by running `ffmpeg -version`.
+fn check_ffmpeg() -> bool {
+    Command::new("ffmpeg")
+        .arg("-version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Returns `true` if FFmpeg is installed and runnable.
+pub fn is_ffmpeg_available() -> bool {
+    *FFMPEG_AVAILABLE.get_or_init(|| {
+        let available = check_ffmpeg();
+        if !available {
+            eprintln!(
+                "[thumb-gen] FFmpeg bulunamadı — video önizlemeleri devre dışı. \
+                 Etkinleştirmek için FFmpeg yükleyin: https://ffmpeg.org"
+            );
+        }
+        available
+    })
+}
 
 // ═══════════════════════════════════════════════
 //  Thumbnail Generator
@@ -77,8 +112,13 @@ pub fn generate_image_thumbnail(source: &Path, out_path: &Path, width: u32, heig
 
 /// Extracts a single frame from a video at ~1 second and saves it to `out_path`.
 /// Requires `ffmpeg` to be available on `$PATH`.
-/// Returns `true` on success.
+/// Returns `true` on success, `false` if FFmpeg is missing or extraction fails.
 pub fn generate_video_thumbnail(source: &Path, out_path: &Path, width: u32, height: u32) -> bool {
+    // Early exit if FFmpeg is not installed — no point spawning a doomed process
+    if !is_ffmpeg_available() {
+        return false;
+    }
+
     // Build the scale filter string: scale to fit within width×height, keep aspect ratio
     let scale_filter = format!(
         "scale='min({w},iw)':min'({h},ih)':force_original_aspect_ratio=decrease",
