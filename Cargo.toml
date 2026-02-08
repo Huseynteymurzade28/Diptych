@@ -17,3 +17,8 @@ gio = "0.21"
 
 # Graph view rendering (force-directed graph)
 rand = "0.8"
+
+# Thumbnail system — image resizing & hashing
+image = "0.25"
+sha2 = "0.10"
+hex = "0.4"

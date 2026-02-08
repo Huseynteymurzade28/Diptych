@@ -1,3 +1,4 @@
+use crate::thumbnail;
 use gtk4::gdk_pixbuf::Pixbuf;
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Image, Label, Orientation, Picture, Spinner};
@@ -153,10 +154,11 @@ fn load_scaled_pixbuf(path: &Path, max_w: i32, max_h: i32) -> Option<Pixbuf> {
     }
 }
 
-// ─── Video Placeholder ───
+// ─── Video Preview (FFmpeg Thumbnail) ───
 
-/// Shows a video icon placeholder with file name — full video preview
-/// would require gstreamer which is out of scope for now.
+/// Extracts a video keyframe via the thumbnail cache/generator system
+/// and shows it as a preview. Falls back to a play-icon placeholder
+/// if FFmpeg is unavailable or the file is corrupted.
 fn build_video_placeholder(container: &Box, file_path: &Path) {
     let overlay_box = Box::builder()
         .orientation(Orientation::Vertical)
@@ -166,12 +168,36 @@ fn build_video_placeholder(container: &Box, file_path: &Path) {
         .css_classes(vec!["preview-video-placeholder".to_string()])
         .build();
 
-    let icon = Image::builder()
-        .icon_name("media-playback-start-symbolic")
-        .pixel_size(64)
-        .halign(Align::Center)
-        .css_classes(vec!["preview-play-icon".to_string()])
-        .build();
+    // Try to load a cached thumbnail first, otherwise generate one
+    let cache = thumbnail::ThumbnailCache::new();
+    let thumb_available = if let Some(cached_path) = cache.get(file_path) {
+        load_scaled_pixbuf(&cached_path, 320, 240)
+    } else {
+        let dest = cache.thumb_path(file_path);
+        if thumbnail::generate_video_thumbnail(file_path, &dest, 320, 240) {
+            load_scaled_pixbuf(&dest, 320, 240)
+        } else {
+            None
+        }
+    };
+
+    if let Some(pixbuf) = thumb_available {
+        let picture = Picture::for_pixbuf(&pixbuf);
+        picture.set_can_shrink(true);
+        picture.set_halign(Align::Center);
+        picture.set_valign(Align::Center);
+        picture.add_css_class("preview-image");
+        overlay_box.append(&picture);
+    } else {
+        // Fallback: play icon
+        let icon = Image::builder()
+            .icon_name("media-playback-start-symbolic")
+            .pixel_size(64)
+            .halign(Align::Center)
+            .css_classes(vec!["preview-play-icon".to_string()])
+            .build();
+        overlay_box.append(&icon);
+    }
 
     let name = file_path
         .file_name()
@@ -192,7 +218,6 @@ fn build_video_placeholder(container: &Box, file_path: &Path) {
         .halign(Align::Center)
         .build();
 
-    overlay_box.append(&icon);
     overlay_box.append(&name_label);
     overlay_box.append(&hint_label);
     container.append(&overlay_box);
@@ -203,19 +228,36 @@ fn build_video_placeholder(container: &Box, file_path: &Path) {
 // ═══════════════════════════════════════════════
 
 /// Builds a small thumbnail suitable for tooltip / hover preview (96×96).
+/// Uses the disk cache so repeated hovers are instant.
 pub fn build_tooltip_preview(file_path: &Path) -> Option<Image> {
     let ext = file_path
         .extension()
         .map(|e| e.to_string_lossy().to_lowercase())
         .unwrap_or_default();
 
-    if !is_image(&ext) {
+    if !is_image(&ext) && !is_video(&ext) {
         return None;
     }
 
-    load_scaled_pixbuf(file_path, 96, 96).map(|pb| {
-        let img = Image::from_pixbuf(Some(&pb));
-        img.add_css_class("preview-tooltip-image");
-        img
-    })
+    // Try cache first
+    let cache = thumbnail::ThumbnailCache::new();
+    if let Some(cached) = cache.get(file_path) {
+        return load_scaled_pixbuf(&cached, 96, 96).map(|pb| {
+            let img = Image::from_pixbuf(Some(&pb));
+            img.add_css_class("preview-tooltip-image");
+            img
+        });
+    }
+
+    // For images we can generate synchronously (fast enough for tooltip)
+    if is_image(&ext) {
+        load_scaled_pixbuf(file_path, 96, 96).map(|pb| {
+            let img = Image::from_pixbuf(Some(&pb));
+            img.add_css_class("preview-tooltip-image");
+            img
+        })
+    } else {
+        // Video — don't block for FFmpeg on tooltip, show nothing
+        None
+    }
 }

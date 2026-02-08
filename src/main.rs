@@ -1,6 +1,7 @@
 mod config;
 mod core;
 mod filesystem;
+mod thumbnail;
 mod ui;
 
 use gtk4::prelude::*;

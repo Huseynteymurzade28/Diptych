@@ -1,5 +1,6 @@
 use crate::config::{AppConfig, IconTheme};
 use crate::filesystem::Entry;
+use crate::thumbnail;
 use crate::ui::widgets::icon::{icon_css_class, icon_for_entry_themed};
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Button, Image, Label, Orientation};
@@ -18,18 +19,25 @@ pub fn create_file_row(entry: &Entry, config: &AppConfig) -> Button {
         .spacing(10)
         .build();
 
-    // Only apply color tinting for the Colorful icon theme
-    let icon_classes = if config.icon_theme == IconTheme::Colorful {
-        vec![icon_css_class(entry).to_string()]
-    } else {
-        vec![]
-    };
+    // Check if this file supports a thumbnail preview
+    let ext = entry.extension.to_lowercase();
+    let has_thumb = !entry.is_dir && thumbnail::supports_thumbnail(&ext);
 
-    let icon = Image::builder()
-        .icon_name(icon_name)
-        .pixel_size(icon_sz)
-        .css_classes(icon_classes)
-        .build();
+    let icon: Image = if has_thumb {
+        thumbnail::request_thumbnail(&entry.path, icon_sz)
+    } else {
+        let icon_classes = if config.icon_theme == IconTheme::Colorful {
+            vec![icon_css_class(entry).to_string()]
+        } else {
+            vec![]
+        };
+
+        Image::builder()
+            .icon_name(icon_name)
+            .pixel_size(icon_sz)
+            .css_classes(icon_classes)
+            .build()
+    };
 
     let name_label = Label::builder()
         .label(&entry.name)
