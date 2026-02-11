@@ -639,28 +639,30 @@ switch:checked {{
 
 /* ── Tree View ── */
 .tree-view-container {{
-    padding: 2px 4px;
+    padding: 6px 8px;
 }}
 
 .tree-row-btn {{
-    border-radius: 8px;
-    padding: 1px 8px 1px 2px;
-    margin: 0px 4px;
-    min-height: 30px;
+    border-radius: 10px;
+    padding: 4px 12px 4px 6px;
+    margin: 1px 4px;
+    min-height: 38px;
     background: transparent;
     color: {fg_primary};
-    border: none;
-    transition: background 120ms ease, border-color 120ms ease;
+    border: 1px solid transparent;
+    transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }}
 .tree-row-btn:hover {{
     background-color: {bg_overlay};
+    box-shadow: 0 1px 4px {shadow};
 }}
 .tree-row-selected {{
-    background-color: {bg_overlay};
+    background-color: rgba(136, 192, 208, 0.14);
     border: 1px solid {border_hover};
+    box-shadow: inset 3px 0 0 {accent};
 }}
 .tree-row-selected:hover {{
-    background-color: {bg_hover};
+    background-color: rgba(136, 192, 208, 0.20);
 }}
 
 /* Guide lines — subtle vertical bars for nesting */
@@ -675,12 +677,12 @@ switch:checked {{
 
 /* Disclosure arrow */
 .tree-arrow {{
-    min-width: 22px;
-    min-height: 22px;
+    min-width: 26px;
+    min-height: 26px;
     padding: 0px;
     margin: 0px;
-    border-radius: 6px;
-    font-size: 11px;
+    border-radius: 7px;
+    font-size: 13px;
     color: {fg_muted};
     background: transparent;
     border: none;
@@ -696,32 +698,117 @@ switch:checked {{
 
 /* File dot (leaf node indicator) */
 .tree-file-dot {{
-    font-size: 8px;
+    font-size: 9px;
     color: {fg_muted};
-    opacity: 0.4;
-    min-width: 22px;
+    opacity: 0.30;
+    min-width: 26px;
 }}
 
-/* Icon styling */
+/* Icon styling — bigger for scannability */
 .tree-icon {{
-    opacity: 0.9;
+    min-width: 22px;
+    min-height: 22px;
+    -gtk-icon-style: symbolic;
+}}
+/* Colorful theme: let GTK render the icon with its native colors */
+.tree-icon-colorful {{
+    -gtk-icon-style: regular;
 }}
 .tree-icon-folder {{
     color: {accent};
 }}
 
-/* Name labels */
+/* Force icon recoloring so .icon-* color classes work on symbolic icons */
+.icon-folder image, .tree-icon.icon-folder {{ color: {accent}; }}
+.icon-rust image, .tree-icon.icon-rust {{ color: #fab387; }}
+.icon-python image, .tree-icon.icon-python {{ color: #89b4fa; }}
+.icon-js image, .tree-icon.icon-js {{ color: #f9e2af; }}
+.icon-c image, .tree-icon.icon-c {{ color: #74c7ec; }}
+.icon-java image, .tree-icon.icon-java {{ color: #f38ba8; }}
+.icon-go image, .tree-icon.icon-go {{ color: #a6e3a1; }}
+.icon-script image, .tree-icon.icon-script {{ color: #cba6f7; }}
+.icon-image image, .tree-icon.icon-image {{ color: #a6e3a1; }}
+.icon-audio image, .tree-icon.icon-audio {{ color: #cba6f7; }}
+.icon-video image, .tree-icon.icon-video {{ color: #f38ba8; }}
+.icon-archive image, .tree-icon.icon-archive {{ color: #f9e2af; }}
+.icon-pdf image, .tree-icon.icon-pdf {{ color: #eba0ac; }}
+.icon-web image, .tree-icon.icon-web {{ color: #94e2d5; }}
+.icon-text image, .tree-icon.icon-text {{ color: {fg_muted}; }}
+.icon-config image, .tree-icon.icon-config {{ color: #94e2d5; }}
+.icon-default image, .tree-icon.icon-default {{ color: {fg_secondary}; }}
+
+/* Name labels — bigger, more readable */
 .tree-name {{
-    font-size: 13px;
+    font-size: 14px;
+    letter-spacing: 0.2px;
 }}
 .tree-name-dir {{
-    font-weight: 600;
+    font-weight: 700;
     color: {fg_primary};
 }}
 .tree-name-file {{
     font-weight: 400;
     color: {fg_subtle};
 }}
+
+/* ── File Extension Colors (Nord / Tokyo Night) ── */
+.tree-ext-rs  {{ color: #d08770; }}   /* Rust — warm orange */
+.tree-ext-py  {{ color: #ebcb8b; }}   /* Python — golden yellow */
+.tree-ext-js  {{ color: #ebcb8b; }}   /* JavaScript — yellow */
+.tree-ext-ts  {{ color: #81a1c1; }}   /* TypeScript — steel blue */
+.tree-ext-jsx {{ color: #88c0d0; }}   /* JSX — cyan */
+.tree-ext-tsx {{ color: #81a1c1; }}   /* TSX — blue */
+.tree-ext-c   {{ color: #81a1c1; }}   /* C — blue */
+.tree-ext-cpp {{ color: #81a1c1; }}   /* C++ — blue */
+.tree-ext-h   {{ color: #8fbcbb; }}   /* Header — teal */
+.tree-ext-go  {{ color: #a3be8c; }}   /* Go — sage green */
+.tree-ext-java {{ color: #bf616a; }}  /* Java — aurora red */
+.tree-ext-kt  {{ color: #b48ead; }}   /* Kotlin — purple */
+.tree-ext-rb  {{ color: #bf616a; }}   /* Ruby — red */
+.tree-ext-swift {{ color: #d08770; }} /* Swift — orange */
+.tree-ext-cs  {{ color: #b48ead; }}   /* C# — purple */
+.tree-ext-lua {{ color: #81a1c1; }}   /* Lua — blue */
+.tree-ext-sh  {{ color: #a3be8c; }}   /* Shell — green */
+.tree-ext-fish {{ color: #a3be8c; }}
+.tree-ext-zsh {{ color: #a3be8c; }}
+.tree-ext-bash {{ color: #a3be8c; }}
+.tree-ext-html {{ color: #bf616a; }}  /* HTML — red */
+.tree-ext-htm {{ color: #bf616a; }}
+.tree-ext-css {{ color: #88c0d0; }}   /* CSS — frost cyan */
+.tree-ext-scss {{ color: #b48ead; }}  /* SCSS — purple */
+.tree-ext-md  {{ color: #4c566a; }}   /* Markdown — muted gray */
+.tree-ext-txt {{ color: {fg_muted}; }}
+.tree-ext-log {{ color: {fg_muted}; }}
+.tree-ext-csv {{ color: {fg_muted}; }}
+.tree-ext-json {{ color: #ebcb8b; }}  /* JSON — yellow */
+.tree-ext-toml {{ color: #d08770; }}  /* TOML — orange */
+.tree-ext-yaml {{ color: #a3be8c; }}  /* YAML — green */
+.tree-ext-yml {{ color: #a3be8c; }}
+.tree-ext-xml {{ color: #81a1c1; }}   /* XML — blue */
+.tree-ext-png {{ color: #a3be8c; }}   /* Images — green */
+.tree-ext-jpg {{ color: #a3be8c; }}
+.tree-ext-jpeg {{ color: #a3be8c; }}
+.tree-ext-gif {{ color: #a3be8c; }}
+.tree-ext-svg {{ color: #ebcb8b; }}   /* SVG — yellow */
+.tree-ext-webp {{ color: #a3be8c; }}
+.tree-ext-mp3 {{ color: #b48ead; }}   /* Audio — purple */
+.tree-ext-flac {{ color: #b48ead; }}
+.tree-ext-ogg {{ color: #b48ead; }}
+.tree-ext-wav {{ color: #b48ead; }}
+.tree-ext-mp4 {{ color: #bf616a; }}   /* Video — red */
+.tree-ext-mkv {{ color: #bf616a; }}
+.tree-ext-avi {{ color: #bf616a; }}
+.tree-ext-mov {{ color: #bf616a; }}
+.tree-ext-webm {{ color: #bf616a; }}
+.tree-ext-zip {{ color: #d08770; }}   /* Archives — orange */
+.tree-ext-tar {{ color: #d08770; }}
+.tree-ext-gz  {{ color: #d08770; }}
+.tree-ext-7z  {{ color: #d08770; }}
+.tree-ext-rar {{ color: #d08770; }}
+.tree-ext-pdf {{ color: #bf616a; }}   /* PDF — red */
+.tree-ext-nix {{ color: #81a1c1; }}   /* Nix — blue */
+.tree-ext-lock {{ color: {fg_muted}; }} /* Lock files — muted */
+.tree-ext-none {{ color: {fg_secondary}; }} /* No extension */
 
 /* Child count badge for directories */
 .tree-badge {{
@@ -742,13 +829,57 @@ switch:checked {{
     margin-right: 4px;
 }}
 
-/* Empty directory hint */
+/* ── Empty Directory State ── */
+.tree-empty-container {{
+    padding: 6px 14px;
+    margin: 2px 4px;
+    border-radius: 10px;
+    background-color: {bg_overlay};
+    border: 1px solid {border};
+}}
+.tree-empty-icon {{
+    opacity: 0.70;
+    color: {accent};
+}}
 .tree-empty-hint {{
-    font-size: 11px;
+    font-size: 12.5px;
     font-style: italic;
+    font-weight: 500;
+    color: {fg_secondary};
+    opacity: 1.0;
+    letter-spacing: 0.3px;
+}}
+
+/* ── Drag Ghost Card (floating preview during drag) ── */
+.drag-ghost-card {{
+    background-color: {bg_surface};
+    border: 1px solid {border_hover};
+    border-radius: 12px;
+    padding: 8px 16px 8px 12px;
+    box-shadow: 0 8px 24px {shadow_hover}, 0 2px 6px {shadow};
+    min-height: 36px;
+}}
+.drag-ghost-icon-file {{
+    opacity: 0.9;
+    color: {fg_subtle};
+}}
+.drag-ghost-icon-folder {{
+    color: {accent};
+}}
+.drag-ghost-name {{
+    font-size: 13px;
+    font-weight: 600;
+    color: {fg_primary};
+    letter-spacing: 0.2px;
+}}
+.drag-ghost-badge {{
+    font-size: 10px;
+    font-weight: 600;
     color: {fg_muted};
-    opacity: 0.5;
-    padding: 2px 0px;
+    background-color: {bg_overlay};
+    border-radius: 99px;
+    padding: 2px 8px;
+    margin-left: 4px;
 }}
 "#,
             bg_base = p.bg_base,

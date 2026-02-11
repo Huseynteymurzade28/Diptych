@@ -1,6 +1,7 @@
 use crate::config::{AppConfig, IconTheme};
 use crate::filesystem::Entry;
 use crate::thumbnail;
+use crate::ui::drag_source;
 use crate::ui::widgets::icon::{icon_css_class, icon_for_entry_themed};
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Button, Image, Label, Orientation};
@@ -71,10 +72,15 @@ pub fn create_file_row(entry: &Entry, config: &AppConfig) -> Button {
         container.append(&date_label);
     }
 
-    Button::builder()
+    let btn = Button::builder()
         .child(&container)
         .halign(Align::Fill)
         .has_frame(false)
         .css_classes(vec!["file-row".to_string()])
-        .build()
+        .build();
+
+    // ── External drag & drop source (files AND folders) ──
+    drag_source::attach_file_drag_source(&btn, &entry.path, icon_name, entry.is_dir);
+
+    btn
 }

@@ -1,6 +1,7 @@
 use crate::config::{AppConfig, IconTheme};
 use crate::filesystem::Entry;
 use crate::thumbnail;
+use crate::ui::drag_source;
 use crate::ui::widgets::icon::{icon_css_class, icon_for_entry_themed};
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Button, Image, Label, Orientation};
@@ -82,6 +83,9 @@ pub fn create_file_card(entry: &Entry, config: &AppConfig) -> Button {
         .width_request(card_width)
         .has_frame(false)
         .build();
+
+    // ── External drag & drop source (files AND folders) ──
+    drag_source::attach_file_drag_source(&btn, &entry.path, icon_name, entry.is_dir);
 
     btn
 }

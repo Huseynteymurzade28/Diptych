@@ -1,6 +1,7 @@
-use crate::config::AppConfig;
+use crate::config::{AppConfig, IconTheme};
 use crate::filesystem;
 use crate::thumbnail;
+use crate::ui::drag_source;
 use crate::ui::widgets::icon::{icon_css_class, icon_for_entry_themed};
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Button, Image, Label, Orientation};
@@ -89,15 +90,33 @@ fn render_tree(
     let entries = filesystem::list_directory(dir_path, cfg.show_hidden);
 
     if entries.is_empty() && depth > 0 {
-        // Show a subtle "empty" hint for expanded empty directories
-        let indent = (depth as i32) * INDENT_PX + 30;
-        let empty_label = Label::builder()
-            .label("empty")
+        // Polished "empty directory" hint
+        let indent = (depth as i32) * INDENT_PX + 8;
+        let empty_box = Box::builder()
+            .orientation(Orientation::Horizontal)
+            .spacing(10)
             .halign(Align::Start)
+            .valign(Align::Center)
             .margin_start(indent)
+            .margin_top(6)
+            .margin_bottom(6)
+            .css_classes(vec!["tree-empty-container".to_string()])
+            .build();
+
+        let empty_icon = Image::builder()
+            .icon_name("folder-open-symbolic")
+            .pixel_size(18)
+            .css_classes(vec!["tree-empty-icon".to_string()])
+            .build();
+        empty_box.append(&empty_icon);
+
+        let empty_label = Label::builder()
+            .label("Empty folder")
             .css_classes(vec!["tree-empty-hint".to_string()])
             .build();
-        container.append(&empty_label);
+        empty_box.append(&empty_label);
+
+        container.append(&empty_box);
         return;
     }
 
@@ -137,7 +156,7 @@ fn render_tree(
         // ── Inner content row ──
         let row = Box::builder()
             .orientation(Orientation::Horizontal)
-            .spacing(8)
+            .spacing(10)
             .hexpand(true)
             .valign(Align::Center)
             .build();
@@ -199,35 +218,59 @@ fn render_tree(
             row.append(&dot);
         }
 
-        // ── Icon ──
+        // ── Icon (bigger for scannability) ──
         let ext = entry.extension.to_lowercase();
         let has_thumb = !entry.is_dir && thumbnail::supports_thumbnail(&ext);
-        let icon_sz = 18;
+        let icon_sz = 22;
+
+        let is_colorful = cfg.icon_theme == IconTheme::Colorful;
+
+        // Colorful → use real themed icons (same as Grid/List)
+        // Minimal/Outline → symbolic icons with CSS color tinting
+        let entry_icon_name = if is_colorful {
+            icon_for_entry_themed(entry, &cfg.icon_theme)
+        } else {
+            tree_icon_name(entry)
+        };
 
         let icon: Image = if has_thumb {
             thumbnail::request_thumbnail(&entry.path, icon_sz)
         } else {
-            let icon_name = icon_for_entry_themed(entry, &cfg.icon_theme);
             let mut classes = vec!["tree-icon".to_string()];
-            if cfg.icon_theme == crate::config::IconTheme::Colorful {
-                classes.push(icon_css_class(entry).to_string());
-            }
+            // Colorful icons get their CSS class for color tinting
+            // Symbolic icons also get it for CSS recoloring
+            classes.push(icon_css_class(entry).to_string());
             if entry.is_dir {
                 classes.push("tree-icon-folder".to_string());
             }
+            if is_colorful {
+                // Remove -gtk-icon-style: symbolic override for colorful
+                classes.push("tree-icon-colorful".to_string());
+            }
             Image::builder()
-                .icon_name(icon_name)
+                .icon_name(entry_icon_name)
                 .pixel_size(icon_sz)
                 .css_classes(classes)
                 .build()
         };
         row.append(&icon);
 
-        // ── Name label ──
+        // ── Name label (with per-extension color class) ──
         let name_css = if entry.is_dir {
             vec!["tree-name".to_string(), "tree-name-dir".to_string()]
         } else {
-            vec!["tree-name".to_string(), "tree-name-file".to_string()]
+            vec![
+                "tree-name".to_string(),
+                "tree-name-file".to_string(),
+                format!(
+                    "tree-ext-{}",
+                    if entry.extension.is_empty() {
+                        "none"
+                    } else {
+                        &entry.extension
+                    }
+                ),
+            ]
         };
 
         let name_label = Label::builder()
@@ -246,8 +289,7 @@ fn render_tree(
                 let count = rd
                     .filter_map(|e| e.ok())
                     .filter(|e| {
-                        cfg.show_hidden
-                            || !e.file_name().to_string_lossy().starts_with('.')
+                        cfg.show_hidden || !e.file_name().to_string_lossy().starts_with('.')
                     })
                     .count();
                 if count > 0 {
@@ -276,6 +318,9 @@ fn render_tree(
             .has_frame(false)
             .css_classes(vec!["tree-row-btn".to_string()])
             .build();
+
+        // ── Drag source (external drag & drop for files AND folders) ──
+        drag_source::attach_file_drag_source(&row_btn, &entry.path, entry_icon_name, entry.is_dir);
 
         // Highlight selected item
         {
@@ -321,10 +366,7 @@ fn render_tree(
                         nav_c.clone(),
                     );
                 } else {
-                    info_c.set_label(&format!(
-                        "{}  •  {}  •  {}",
-                        name, size_disp, mod_disp
-                    ));
+                    info_c.set_label(&format!("{}  •  {}  •  {}", name, size_disp, mod_disp));
                     *sel_c.borrow_mut() = Some(entry_path.clone());
                     if let Err(e) = open::that(&entry_path) {
                         eprintln!("Failed to open file: {}", e);
@@ -349,6 +391,38 @@ fn render_tree(
                 on_navigate.clone(),
             );
         }
+    }
+}
+
+/// Returns a symbolic icon name for the tree view.
+/// Always uses -symbolic suffix so CSS `color` property works.
+fn tree_icon_name(entry: &crate::filesystem::Entry) -> &'static str {
+    if entry.is_dir {
+        return "folder-symbolic";
+    }
+    match entry.extension.as_str() {
+        "rs" => "text-x-script-symbolic",
+        "py" => "text-x-script-symbolic",
+        "js" | "ts" | "jsx" | "tsx" => "text-x-script-symbolic",
+        "c" | "cpp" | "h" => "text-x-script-symbolic",
+        "java" | "kt" => "text-x-script-symbolic",
+        "go" => "text-x-script-symbolic",
+        "rb" | "swift" | "cs" | "lua" => "text-x-script-symbolic",
+        "sh" | "fish" | "zsh" | "bash" => "application-x-executable-symbolic",
+        "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "bmp" | "ico" => {
+            "image-x-generic-symbolic"
+        }
+        "mp3" | "flac" | "ogg" | "wav" | "m4a" | "aac" => "audio-x-generic-symbolic",
+        "mp4" | "mkv" | "avi" | "mov" | "webm" => "video-x-generic-symbolic",
+        "zip" | "tar" | "gz" | "bz2" | "xz" | "7z" | "rar" => "package-x-generic-symbolic",
+        "pdf" => "x-office-document-symbolic",
+        "html" | "htm" => "text-html-symbolic",
+        "css" | "scss" => "text-x-preview-symbolic",
+        "md" => "x-office-document-symbolic",
+        "json" | "toml" | "yaml" | "yml" | "xml" => "emblem-system-symbolic",
+        "txt" | "log" | "csv" => "accessories-text-editor-symbolic",
+        "nix" => "emblem-system-symbolic",
+        _ => "text-x-generic-symbolic",
     }
 }
 

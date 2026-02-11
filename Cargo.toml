@@ -22,3 +22,8 @@ rand = "0.8"
 image = "0.25"
 sha2 = "0.10"
 hex = "0.4"
+
+# Drag ghost rendering (cairo surface → GdkTexture)
+pango = "0.21"
+pangocairo = "0.21"
+cairo-rs = { version = "0.21", features = ["png"] }
