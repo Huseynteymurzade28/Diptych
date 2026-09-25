@@ -1,4 +1,5 @@
 use crate::config::{AppConfig, IconTheme};
+use crate::core::truncate_chars;
 use crate::filesystem::Entry;
 use crate::thumbnail;
 use crate::ui::drag_source;
@@ -45,7 +46,7 @@ pub fn create_file_card(entry: &Entry, config: &AppConfig) -> Button {
     };
 
     let name_label = Label::builder()
-        .label(&truncate_name(&entry.name, 18))
+        .label(&truncate_chars(&entry.name, 18))
         .css_classes(vec!["file-card-name".to_string()])
         .halign(Align::Center)
         .wrap(true)
@@ -88,14 +89,4 @@ pub fn create_file_card(entry: &Entry, config: &AppConfig) -> Button {
     drag_source::attach_file_drag_source(&btn, &entry.path, icon_name, entry.is_dir);
 
     btn
-}
-
-// ─── Helpers ───
-
-fn truncate_name(name: &str, max_len: usize) -> String {
-    if name.len() <= max_len {
-        name.to_string()
-    } else {
-        format!("{}…", &name[..max_len - 1])
-    }
 }

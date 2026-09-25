@@ -18,7 +18,7 @@ use std::rc::Rc;
 //   1. Background context menu — right-click on empty space
 //      → "New Folder", "New File"
 //   2. File/item context menu  — right-click on a file entry
-//      → "Open", "Rename", "Delete"
+//      → "Open", "Rename", "Move to Trash", "Delete Permanently…"
 
 // ═══════════════════════════════════════════════
 //  Background Context Menu (empty area)
@@ -176,7 +176,7 @@ fn build_background_popover(
 // ═══════════════════════════════════════════════
 
 /// Attaches a right-click context menu to a file/folder widget.
-/// Provides "Open", "Rename", "Delete" options.
+/// Provides "Open", "Rename", "Move to Trash" and "Delete Permanently…" options.
 pub fn attach_file_context_menu(
     target: &impl IsA<Widget>,
     file_path: PathBuf,
@@ -216,12 +216,14 @@ pub fn attach_file_context_menu(
         .margin_top(4)
         .margin_bottom(4)
         .build();
-    let delete_btn = context_menu_button("user-trash-symbolic", "Delete");
+    let trash_btn = context_menu_button("user-trash-symbolic", "Move to Trash");
+    let delete_btn = context_menu_button("edit-delete-symbolic", "Delete Permanently…");
     delete_btn.add_css_class("context-menu-danger");
 
     menu_box.append(&open_btn);
     menu_box.append(&rename_btn);
     menu_box.append(&sep);
+    menu_box.append(&trash_btn);
     menu_box.append(&delete_btn);
     popover.set_child(Some(&menu_box));
 
@@ -271,7 +273,7 @@ pub fn attach_file_context_menu(
         });
     }
 
-    // Wire: Delete
+    // Wire: Move to Trash (recoverable, so no confirmation)
     {
         let file_path_c = file_path.clone();
         let popover_c = popover.clone();
@@ -281,20 +283,58 @@ pub fn attach_file_context_menu(
         let sel = selected_file_path.clone();
         let cfg = config.clone();
 
-        delete_btn.connect_clicked(move |_| {
+        trash_btn.connect_clicked(move |_| {
             popover_c.popdown();
-            // Perform deletion
-            let result = if file_path_c.is_dir() {
-                std::fs::remove_dir_all(&file_path_c)
-            } else {
-                std::fs::remove_file(&file_path_c)
-            };
-            match result {
-                Ok(_) => {
-                    refresh_content(&cb, cp.clone(), &info, sel.clone(), cfg.clone());
-                }
-                Err(e) => eprintln!("Failed to delete: {}", e),
+            match filesystem::move_to_trash(&file_path_c) {
+                Ok(_) => refresh_content(&cb, cp.clone(), &info, sel.clone(), cfg.clone()),
+                Err(e) => eprintln!("Failed to move to trash: {}", e),
             }
+        });
+    }
+
+    // Wire: Delete Permanently (asks for confirmation first)
+    {
+        let file_path_c = file_path.clone();
+        let popover_c = popover.clone();
+        let cp = current_path.clone();
+        let cb = content_box.clone();
+        let info = inspector_info.clone();
+        let sel = selected_file_path.clone();
+        let cfg = config.clone();
+
+        delete_btn.connect_clicked(move |btn| {
+            popover_c.popdown();
+
+            let name = file_path_c
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let dialog = gtk4::AlertDialog::builder()
+                .modal(true)
+                .message(format!("Permanently delete “{}”?", name))
+                .detail("This item will be deleted immediately. You can’t undo this action.")
+                .buttons(["Cancel", "Delete"])
+                .cancel_button(0)
+                .default_button(0)
+                .build();
+
+            let parent = btn.root().and_downcast::<gtk4::Window>();
+            let file_path_cc = file_path_c.clone();
+            let cp = cp.clone();
+            let cb = cb.clone();
+            let info = info.clone();
+            let sel = sel.clone();
+            let cfg = cfg.clone();
+
+            dialog.choose(parent.as_ref(), gio::Cancellable::NONE, move |choice| {
+                if choice != Ok(1) {
+                    return;
+                }
+                match filesystem::delete_permanently(&file_path_cc) {
+                    Ok(_) => refresh_content(&cb, cp.clone(), &info, sel.clone(), cfg.clone()),
+                    Err(e) => eprintln!("Failed to delete: {}", e),
+                }
+            });
         });
     }
 }

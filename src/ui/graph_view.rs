@@ -562,7 +562,7 @@ fn draw_graph(cr: &gtk4::cairo::Context, state: &GraphState, width: f64, height:
         cr.set_font_size(font_size / state.zoom.max(0.3));
         cr.set_source_rgba(0.9, 0.9, 0.95, if is_hovered { 1.0 } else { 0.8 });
 
-        let label = truncate_label(&node.label, 18);
+        let label = crate::core::truncate_chars(&node.label, 18);
         if let Ok(extents) = cr.text_extents(&label) {
             cr.move_to(node.x - extents.width() / 2.0, node.y + r + 14.0);
             cr.show_text(&label).ok();
@@ -634,13 +634,5 @@ fn file_color_for_ext(ext: &str) -> NodeColor {
             g: 0.60,
             b: 0.65,
         }, // default grey
-    }
-}
-
-fn truncate_label(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        format!("{}…", &s[..max - 1])
     }
 }
