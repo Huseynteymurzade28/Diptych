@@ -1,0 +1,49 @@
+# Built-in Diptych theme. Copy to ~/.config/diptych/themes/<name>.toml to make your own.
+name = "Tokyo Soft"
+dark = true
+
+[colors]
+window = "#1a1b26"
+sidebar = "#16161e"
+surface = "#292e42"
+hover = "#3b4261"
+text = "#c0caf5"
+text-secondary = "#565f89"
+text-muted = "#565f89"
+text-subtle = "#c0caf5"
+accent = "#7aa2f7"
+accent-hover = "#9bb8f9"
+accent-text = "@window"
+border = "rgba(192, 202, 245, 0.06)"
+border-hover = "rgba(122, 162, 247, 0.25)"
+shadow = "rgba(0, 0, 0, 0.18)"
+shadow-hover = "rgba(0, 0, 0, 0.28)"
+danger = "#f7768e"
+
+[files]
+folder = "@accent"
+rust = "#ff9e64"
+python = "#7aa2f7"
+js = "#e0af68"
+c = "#7dcfff"
+java = "#f7768e"
+go = "#9ece6a"
+script = "#bb9af7"
+image = "#9ece6a"
+audio = "#bb9af7"
+video = "#f7768e"
+archive = "#e0af68"
+pdf = "#f7768e"
+web = "#73daca"
+text = "@text-muted"
+config = "#73daca"
+default = "@text-secondary"
+
+[shape]
+radius = 14
+density = "comfortable"
+
+[fonts]
+ui = "Inter, Cantarell, sans-serif"
+mono = "JetBrains Mono, monospace"
+scale = 1.0

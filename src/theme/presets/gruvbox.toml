@@ -1,0 +1,49 @@
+# Built-in Diptych theme. Copy to ~/.config/diptych/themes/<name>.toml to make your own.
+name = "Gruvbox"
+dark = true
+
+[colors]
+window = "#282828"
+sidebar = "#1d2021"
+surface = "#3c3836"
+hover = "#504945"
+text = "#ebdbb2"
+text-secondary = "#928374"
+text-muted = "#928374"
+text-subtle = "#ebdbb2"
+accent = "#d79921"
+accent-hover = "#e5b84a"
+accent-text = "@window"
+border = "rgba(235, 219, 178, 0.06)"
+border-hover = "rgba(215, 153, 33, 0.25)"
+shadow = "rgba(0, 0, 0, 0.18)"
+shadow-hover = "rgba(0, 0, 0, 0.28)"
+danger = "#fb4934"
+
+[files]
+folder = "@accent"
+rust = "#fe8019"
+python = "#83a598"
+js = "#fabd2f"
+c = "#83a598"
+java = "#fb4934"
+go = "#b8bb26"
+script = "#d3869b"
+image = "#b8bb26"
+audio = "#d3869b"
+video = "#fb4934"
+archive = "#fabd2f"
+pdf = "#fb4934"
+web = "#8ec07c"
+text = "@text-muted"
+config = "#8ec07c"
+default = "@text-secondary"
+
+[shape]
+radius = 14
+density = "comfortable"
+
+[fonts]
+ui = "Inter, Cantarell, sans-serif"
+mono = "JetBrains Mono, monospace"
+scale = 1.0

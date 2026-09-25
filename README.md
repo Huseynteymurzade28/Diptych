@@ -11,6 +11,29 @@ The name "Diptych" refers to a work of art made of two hinged parts—reflecting
 - **NixOS-Ready:** Includes a `flake.nix` for instant dev environments.
 - **Diptych UX:** A unique "Select & Inspect" workflow.
 
+## 🎨 Customization
+
+Everything visual is driven by theme tokens in `~/.config/diptych/theme.toml`,
+which is created on first launch and **applied live whenever you save it**:
+
+```toml
+base = "nord"                 # a built-in preset or ~/.config/diptych/themes/<id>.toml
+
+[colors]
+accent = "#ff79c6"
+
+[shape]
+radius = 6                    # corner radius in px
+density = "compact"           # compact | comfortable | spacious
+
+[fonts]
+ui = "Figtree, sans-serif"
+scale = 1.1
+```
+
+For anything tokens don't cover, write plain GTK CSS in `~/.config/diptych/user.css`
+(also hot-reloaded). See [docs/theming.md](docs/theming.md) for every token and CSS class.
+
 ## 🛠️ Development Setup
 
 You can develop Diptych on **any operating system**.
@@ -28,9 +51,9 @@ You can develop Diptych on **any operating system**.
 ### Option B: Other Linux Distros (Arch, Fedora, Ubuntu, etc.)
 
 1. Install system dependencies (GTK4):
-   - **Arch:** `sudo pacman -S gtk4 base-devel`
-   - **Ubuntu/Debian:** `sudo apt install libgtk-4-dev build-essential`
-   - **Fedora:** `sudo dnf install gtk4-devel gcc`
+   - **Arch:** `sudo pacman -S gtk4 libadwaita base-devel`
+   - **Ubuntu/Debian:** `sudo apt install libgtk-4-dev libadwaita-1-dev build-essential`
+   - **Fedora:** `sudo dnf install gtk4-devel libadwaita-devel gcc`
 2. Run the project:
    ```bash
    cargo run

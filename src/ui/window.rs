@@ -1,19 +1,16 @@
-use crate::config::AppConfig;
-use crate::core::Theme;
+use crate::config::{persistence, AppConfig};
+use crate::theme::ThemeManager;
 use crate::ui::state::{AppState, StateWidgets};
 use crate::ui::{context_menu, hamburger, inspector, sidebar};
 use gtk4::prelude::*;
-use gtk4::{
-    Align, Application, ApplicationWindow, Box, Button, CssProvider, Label, Orientation, Paned,
-    ScrolledWindow,
-};
+use gtk4::{Align, ApplicationWindow, Box, Button, Label, Orientation, Paned, ScrolledWindow};
 use std::path::PathBuf;
 
 // ═══════════════════════════════════════════════
 //  Main Window Assembly
 // ═══════════════════════════════════════════════
 
-pub fn build(app: &Application) {
+pub fn build(app: &adw::Application) {
     // ── Load persisted config ──
     let config = AppConfig::load();
 
@@ -21,16 +18,8 @@ pub fn build(app: &Application) {
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_else(|| PathBuf::from("/"));
 
-    // ── Theme setup ──
-    let css_provider = CssProvider::new();
-    css_provider.load_from_data(&Theme::from_name(&config.theme).to_css());
-    if let Some(display) = gtk4::gdk::Display::default() {
-        gtk4::style_context_add_provider_for_display(
-            &display,
-            &css_provider,
-            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-    }
+    // ── Theme (theme.toml + user.css, hot-reloaded) ──
+    let theme = ThemeManager::new(&persistence::config_dir(), &config.theme);
 
     // ── Window ──
     let window = ApplicationWindow::builder()
@@ -132,7 +121,7 @@ pub fn build(app: &Application) {
         start_path,
         StateWidgets {
             window: window.clone(),
-            css_provider,
+            theme,
             content_scroll,
             content_box: content_box.clone(),
             nav_box,
@@ -164,4 +153,5 @@ pub fn build(app: &Application) {
 
     state.refresh();
     window.present();
+    crate::ui::snapshot::schedule_if_requested(&window);
 }

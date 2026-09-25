@@ -27,6 +27,7 @@ jobs:
             pkg-config \
             libssl-dev \
             libgtk-4-dev \
+            libadwaita-1-dev \
             libgraphene-1.0-dev \
             libcairo2-dev \
             libpango1.0-dev \

@@ -5,12 +5,16 @@ use super::types::AppConfig;
 
 // ─── Path Helper ───
 
+/// Diptych's config directory: `~/.config/diptych`
+pub fn config_dir() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("diptych")
+}
+
 /// Returns the config file path: `~/.config/diptych/config.toml`
 fn config_path() -> PathBuf {
-    let config_dir = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("diptych");
-    config_dir.join("config.toml")
+    config_dir().join("config.toml")
 }
 
 // ─── Load ───

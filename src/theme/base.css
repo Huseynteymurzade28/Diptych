@@ -1,0 +1,588 @@
+/* ═══════════════════════════════════════════════
+   Diptych base stylesheet (template)
+
+   Rendered by src/theme/css.rs from the active theme's tokens.
+   Placeholders are written in double curly braces:
+     accent, file-rust …   a color token
+     accent/0.2            the same color at 20 % opacity
+     radius 0.72           corner radius × factor, in px
+     sp 6                  spacing in px, scaled by density
+     fs 13                 font size in px, scaled by fonts.scale
+     font-ui, font-mono    font families
+   Anything here can be overridden from ~/.config/diptych/user.css.
+   ═══ */
+/* ── Base ── */
+window {
+    background-color: {{window}};
+    color: {{text}};
+    font-family: {{font-ui}};
+}
+
+/* ── Sidebar ── */
+.sidebar {
+    background-color: {{sidebar}};
+    border-right: 1px solid {{border}};
+}
+.sidebar-title {
+    font-size: {{fs 11}};
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: {{text-secondary}};
+    padding: {{sp 6}} {{sp 14}} {{sp 4}} {{sp 14}};
+}
+.place-btn {
+    border-radius: {{radius 0.72}};
+    padding: {{sp 6}} {{sp 10}};
+    margin: 1px {{sp 4}};
+    background: transparent;
+    color: {{text}};
+    border: none;
+    font-size: {{fs 13}};
+    transition: background 150ms ease;
+}
+.place-btn:hover {
+    background-color: {{surface}};
+}
+.place-btn:active, .place-btn:checked {
+    background-color: {{hover}};
+}
+
+/* ── Toolbar ── */
+.toolbar {
+    background: transparent;
+    padding: {{sp 4}} {{sp 6}};
+}
+.toolbar-btn {
+    border-radius: {{radius 0.72}};
+    padding: {{sp 6}} {{sp 8}};
+    min-width: 28px;
+    min-height: 28px;
+    background: transparent;
+    color: {{text-secondary}};
+    border: none;
+    transition: background 150ms ease;
+}
+.toolbar-btn:hover {
+    background-color: {{surface}};
+    color: {{text}};
+}
+.toolbar-btn:active, .toolbar-btn:checked {
+    background-color: {{hover}};
+    color: {{accent}};
+}
+
+/* ── Header / Breadcrumb ── */
+.header-bar {
+    background-color: {{sidebar}};
+    border-bottom: 1px solid {{border}};
+    padding: {{sp 4}} {{sp 12}};
+    min-height: {{sp 38}};
+}
+.breadcrumb-label {
+    font-size: {{fs 13}};
+    font-weight: 600;
+    color: {{text-secondary}};
+}
+.breadcrumb-label-active {
+    color: {{text}};
+}
+
+/* ── File Cards (Grid Mode) ── */
+.file-card {
+    background-color: {{surface}};
+    border-radius: {{radius 1}};
+    padding: {{sp 14}} {{sp 10}} {{sp 10}} {{sp 10}};
+    border: 1px solid {{border}};
+    box-shadow: 0 2px 8px {{shadow}};
+    transition: all 180ms ease;
+    margin: {{sp 4}};
+}
+.file-card:hover {
+    background-color: {{hover}};
+    border-color: {{border-hover}};
+    box-shadow: 0 4px 16px {{shadow-hover}};
+}
+.file-card-name {
+    font-size: {{fs 12}};
+    font-weight: 500;
+    color: {{text}};
+}
+.file-card-meta {
+    font-size: {{fs 10}};
+    color: {{text-muted}};
+    margin-top: {{sp 2}};
+}
+
+/* ── File Row (List Mode) ── */
+.file-row {
+    border-radius: {{radius 0.72}};
+    padding: {{sp 4}} {{sp 10}};
+    margin: 1px {{sp 4}};
+    background: transparent;
+    color: {{text}};
+    border: none;
+    transition: background 150ms ease;
+}
+.file-row:hover {
+    background-color: {{surface}};
+}
+.file-row-meta {
+    font-size: {{fs 10}};
+    color: {{text-muted}};
+}
+
+/* ── Group Header ── */
+.group-header {
+    font-size: {{fs 12}};
+    font-weight: 700;
+    color: {{accent}};
+    padding: {{sp 8}} {{sp 12}} {{sp 4}} {{sp 12}};
+    letter-spacing: 0.5px;
+}
+
+/* ── Inspector Panel ── */
+.inspector {
+    background-color: {{window}};
+}
+.inspector-title {
+    font-size: {{fs 18}};
+    font-weight: 700;
+    color: {{text}};
+}
+.inspector-subtitle {
+    font-size: {{fs 12}};
+    color: {{text-muted}};
+}
+.inspector-meta-label {
+    font-size: {{fs 11}};
+    color: {{text-secondary}};
+    font-weight: 600;
+}
+.inspector-meta-value {
+    font-size: {{fs 11}};
+    color: {{text-subtle}};
+}
+
+/* ── Buttons ── */
+.btn-primary {
+    background-color: {{accent}};
+    color: {{accent-text}};
+    border-radius: {{radius 0.86}};
+    padding: {{sp 8}} {{sp 20}};
+    font-weight: 600;
+    border: none;
+    box-shadow: 0 2px 8px {{accent/0.2}};
+    transition: all 150ms ease;
+}
+.btn-primary:hover {
+    background-color: {{accent-hover}};
+    box-shadow: 0 4px 12px {{accent/0.2}};
+}
+.btn-secondary {
+    background-color: {{surface}};
+    color: {{text}};
+    border-radius: {{radius 0.86}};
+    padding: {{sp 8}} {{sp 16}};
+    font-weight: 600;
+    border: 1px solid {{border-hover}};
+    transition: all 150ms ease;
+}
+.btn-secondary:hover {
+    background-color: {{hover}};
+    border-color: {{accent}};
+    color: {{text}};
+}
+
+/* ── Entries ── */
+entry {
+    background-color: {{surface}};
+    color: {{text}};
+    border: 1px solid {{border}};
+    border-radius: {{radius 0.72}};
+    padding: {{sp 6}} {{sp 10}};
+    caret-color: {{accent}};
+}
+entry:focus {
+    border-color: {{border-hover}};
+}
+
+/* ── Popover ── */
+popover {
+    background-color: {{window}};
+    color: {{text}};
+    border: 1px solid {{border}};
+    border-radius: {{radius 1}};
+    box-shadow: 0 8px 32px {{shadow-hover}};
+}
+popover contents {
+    border-radius: {{radius 1}};
+    padding: {{sp 4}};
+}
+
+/* ── Scrollbar ── */
+scrollbar slider {
+    background-color: {{hover}};
+    border-radius: 99px;
+    min-width: 6px;
+    min-height: 6px;
+}
+scrollbar slider:hover {
+    background-color: {{text-muted}};
+}
+
+/* ── Separators ── */
+separator {
+    background-color: {{border}};
+    min-height: 1px;
+}
+
+/* ── Scale (Slider) ── */
+scale trough {
+    background-color: {{surface}};
+    border-radius: 99px;
+    min-height: 6px;
+}
+scale highlight {
+    background-color: {{accent}};
+    border-radius: 99px;
+}
+scale slider {
+    background-color: {{text}};
+    border-radius: 50%;
+    min-width: 16px;
+    min-height: 16px;
+    box-shadow: 0 1px 4px {{shadow}};
+}
+
+/* ── Switch / Toggle ── */
+switch {
+    background-color: {{surface}};
+    border-radius: 99px;
+}
+switch:checked {
+    background-color: {{accent}};
+}
+
+/* ── Settings Panel ── */
+.settings-section-title {
+    font-size: {{fs 13}};
+    font-weight: 700;
+    color: {{accent}};
+    letter-spacing: 0.5px;
+}
+.settings-label {
+    font-size: {{fs 12}};
+    color: {{text-subtle}};
+}
+.settings-panel {
+    background-color: {{sidebar}};
+    border-radius: {{radius 1.15}};
+    padding: {{sp 16}};
+}
+
+/* ── Context Menu ── */
+.context-menu {
+    background-color: {{window}};
+    border: 1px solid {{border}};
+    border-radius: {{radius 1}};
+}
+.context-menu-item {
+    border-radius: {{radius 0.57}};
+    padding: {{sp 6}} {{sp 12}};
+    background: transparent;
+    color: {{text}};
+    border: none;
+    font-size: {{fs 13}};
+    transition: background 150ms ease;
+}
+.context-menu-item:hover {
+    background-color: {{surface}};
+}
+
+/* ── Creation Popover Buttons ── */
+.creation-btn {
+    font-weight: 700;
+    font-size: {{fs 13}};
+    min-width: 60px;
+    padding: {{sp 8}} {{sp 18}};
+    letter-spacing: 0.3px;
+}
+
+.context-menu-danger {
+    color: {{danger}};
+}
+.context-menu-danger:hover {
+    background-color: {{danger/0.15}};
+}
+.context-menu-title {
+    font-size: {{fs 12}};
+    font-weight: 700;
+    color: {{accent}};
+    margin-bottom: {{sp 4}};
+}
+
+/* ── Hamburger Menu ── */
+.hamburger-title {
+    font-size: {{fs 14}};
+    font-weight: 700;
+    color: {{accent}};
+    letter-spacing: 0.5px;
+}
+
+/* ── Graph View ── */
+.graph-view {
+    background-color: {{window}};
+}
+
+/* ── Media Preview ── */
+.preview-container {
+    padding: {{sp 16}};
+    background-color: {{surface}};
+    border-radius: {{radius 1}};
+    border: 1px solid {{border}};
+}
+.preview-image {
+    border-radius: {{radius 0.72}};
+}
+.preview-loading-label {
+    font-size: {{fs 12}};
+    color: {{text-muted}};
+}
+.preview-dimension-label {
+    font-size: {{fs 10}};
+    color: {{text-muted}};
+    margin-top: {{sp 4}};
+}
+.preview-error-label {
+    font-size: {{fs 12}};
+    color: {{danger}};
+}
+.preview-video-placeholder {
+    padding: {{sp 24}};
+    background-color: {{surface}};
+    border-radius: {{radius 1}};
+    border: 1px solid {{border}};
+}
+.preview-play-icon {
+    color: {{accent}};
+    opacity: 0.8;
+}
+.preview-video-name {
+    font-size: {{fs 13}};
+    font-weight: 600;
+    color: {{text}};
+}
+.preview-hint-label {
+    font-size: {{fs 10}};
+    color: {{text-muted}};
+}
+.preview-tooltip-image {
+    border-radius: {{radius 0.43}};
+}
+
+/* ── Icon Color Classes (Colorful theme) ── */
+.icon-folder { color: {{file-folder}}; }
+.icon-rust { color: {{file-rust}}; }
+.icon-python { color: {{file-python}}; }
+.icon-js { color: {{file-js}}; }
+.icon-c { color: {{file-c}}; }
+.icon-java { color: {{file-java}}; }
+.icon-go { color: {{file-go}}; }
+.icon-script { color: {{file-script}}; }
+.icon-image { color: {{file-image}}; }
+.icon-audio { color: {{file-audio}}; }
+.icon-video { color: {{file-video}}; }
+.icon-archive { color: {{file-archive}}; }
+.icon-pdf { color: {{file-pdf}}; }
+.icon-web { color: {{file-web}}; }
+.icon-text { color: {{file-text}}; }
+.icon-config { color: {{file-config}}; }
+.icon-default { color: {{file-default}}; }
+
+/* ── Tree View ── */
+.tree-view-container {
+    padding: {{sp 6}} {{sp 8}};
+}
+
+.tree-row-btn {
+    border-radius: {{radius 0.72}};
+    padding: {{sp 4}} {{sp 12}} {{sp 4}} {{sp 6}};
+    margin: 1px {{sp 4}};
+    min-height: {{sp 38}};
+    background: transparent;
+    color: {{text}};
+    border: 1px solid transparent;
+    transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+.tree-row-btn:hover {
+    background-color: {{surface}};
+    box-shadow: 0 1px 4px {{shadow}};
+}
+.tree-row-selected {
+    background-color: {{accent/0.14}};
+    border: 1px solid {{border-hover}};
+    box-shadow: inset 3px 0 0 {{accent}};
+}
+.tree-row-selected:hover {
+    background-color: {{accent/0.2}};
+}
+
+/* Guide lines — subtle vertical bars for nesting */
+.tree-guide-line {
+    border-left: 1px solid {{border}};
+    margin-left: {{sp 10}};
+    min-width: 1px;
+}
+.tree-guide-spacer {
+    min-width: 20px;
+}
+
+/* Disclosure arrow */
+.tree-arrow {
+    min-width: 26px;
+    min-height: 26px;
+    padding: 0px;
+    margin: 0px;
+    border-radius: {{radius 0.5}};
+    font-size: {{fs 13}};
+    color: {{text-muted}};
+    background: transparent;
+    border: none;
+    transition: color 120ms ease, background 120ms ease;
+}
+.tree-arrow:hover {
+    color: {{accent}};
+    background-color: {{hover}};
+}
+.tree-arrow-open {
+    color: {{accent}};
+}
+
+/* File dot (leaf node indicator) */
+.tree-file-dot {
+    font-size: {{fs 9}};
+    color: {{text-muted}};
+    opacity: 0.30;
+    min-width: 26px;
+}
+
+/* Icon styling — bigger for scannability */
+.tree-icon {
+    min-width: 22px;
+    min-height: 22px;
+    -gtk-icon-style: symbolic;
+}
+/* Colorful theme: let GTK render the icon with its native colors */
+.tree-icon-colorful {
+    -gtk-icon-style: regular;
+}
+.tree-icon-folder {
+    color: {{accent}};
+}
+
+/* Force icon recoloring so .icon-* color classes work on symbolic icons */
+.icon-folder image, .tree-icon.icon-folder { color: {{file-folder}}; }
+.icon-rust image, .tree-icon.icon-rust { color: {{file-rust}}; }
+.icon-python image, .tree-icon.icon-python { color: {{file-python}}; }
+.icon-js image, .tree-icon.icon-js { color: {{file-js}}; }
+.icon-c image, .tree-icon.icon-c { color: {{file-c}}; }
+.icon-java image, .tree-icon.icon-java { color: {{file-java}}; }
+.icon-go image, .tree-icon.icon-go { color: {{file-go}}; }
+.icon-script image, .tree-icon.icon-script { color: {{file-script}}; }
+.icon-image image, .tree-icon.icon-image { color: {{file-image}}; }
+.icon-audio image, .tree-icon.icon-audio { color: {{file-audio}}; }
+.icon-video image, .tree-icon.icon-video { color: {{file-video}}; }
+.icon-archive image, .tree-icon.icon-archive { color: {{file-archive}}; }
+.icon-pdf image, .tree-icon.icon-pdf { color: {{file-pdf}}; }
+.icon-web image, .tree-icon.icon-web { color: {{file-web}}; }
+.icon-text image, .tree-icon.icon-text { color: {{file-text}}; }
+.icon-config image, .tree-icon.icon-config { color: {{file-config}}; }
+.icon-default image, .tree-icon.icon-default { color: {{file-default}}; }
+
+/* Name labels — bigger, more readable */
+.tree-name {
+    font-size: {{fs 14}};
+    letter-spacing: 0.2px;
+}
+.tree-name-dir {
+    font-weight: 700;
+    color: {{text}};
+}
+.tree-name-file {
+    font-weight: 400;
+    color: {{text-subtle}};
+}
+
+/* .tree-ext-* rules are generated from the [files] colors (see css.rs) */
+
+/* Child count badge for directories */
+.tree-badge {
+    font-size: {{fs 9}};
+    font-weight: 700;
+    color: {{text-muted}};
+    background-color: {{surface}};
+    border-radius: 99px;
+    padding: 1px {{sp 7}};
+    margin-right: {{sp 2}};
+    min-height: 16px;
+}
+
+/* File size metadata */
+.tree-meta {
+    font-size: {{fs 10}};
+    color: {{text-muted}};
+    margin-right: {{sp 4}};
+}
+
+/* ── Empty Directory State ── */
+.tree-empty-container {
+    padding: {{sp 6}} {{sp 14}};
+    margin: {{sp 2}} {{sp 4}};
+    border-radius: {{radius 0.72}};
+    background-color: {{surface}};
+    border: 1px solid {{border}};
+}
+.tree-empty-icon {
+    opacity: 0.70;
+    color: {{accent}};
+}
+.tree-empty-hint {
+    font-size: {{fs 12.5}};
+    font-style: italic;
+    font-weight: 500;
+    color: {{text-secondary}};
+    opacity: 1.0;
+    letter-spacing: 0.3px;
+}
+
+/* ── Drag Ghost Card (floating preview during drag) ── */
+.drag-ghost-card {
+    background-color: {{sidebar}};
+    border: 1px solid {{border-hover}};
+    border-radius: {{radius 0.86}};
+    padding: {{sp 8}} {{sp 16}} {{sp 8}} {{sp 12}};
+    box-shadow: 0 8px 24px {{shadow-hover}}, 0 2px 6px {{shadow}};
+    min-height: 36px;
+}
+.drag-ghost-icon-file {
+    opacity: 0.9;
+    color: {{text-subtle}};
+}
+.drag-ghost-icon-folder {
+    color: {{accent}};
+}
+.drag-ghost-name {
+    font-size: {{fs 13}};
+    font-weight: 600;
+    color: {{text}};
+    letter-spacing: 0.2px;
+}
+.drag-ghost-badge {
+    font-size: {{fs 10}};
+    font-weight: 600;
+    color: {{text-muted}};
+    background-color: {{surface}};
+    border-radius: 99px;
+    padding: {{sp 2}} {{sp 8}};
+    margin-left: {{sp 4}};
+}

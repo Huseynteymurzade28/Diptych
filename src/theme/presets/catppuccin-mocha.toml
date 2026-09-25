@@ -1,0 +1,49 @@
+# Built-in Diptych theme. Copy to ~/.config/diptych/themes/<name>.toml to make your own.
+name = "Catppuccin Mocha"
+dark = true
+
+[colors]
+window = "#1e1e2e"
+sidebar = "#181825"
+surface = "#313244"
+hover = "#45475a"
+text = "#cdd6f4"
+text-secondary = "#a6adc8"
+text-muted = "#6c7086"
+text-subtle = "#bac2de"
+accent = "#89b4fa"
+accent-hover = "#b4d0fb"
+accent-text = "@window"
+border = "rgba(205, 214, 244, 0.06)"
+border-hover = "rgba(137, 180, 250, 0.25)"
+shadow = "rgba(0, 0, 0, 0.18)"
+shadow-hover = "rgba(0, 0, 0, 0.28)"
+danger = "#f38ba8"
+
+[files]
+folder = "@accent"
+rust = "#fab387"
+python = "#89b4fa"
+js = "#f9e2af"
+c = "#74c7ec"
+java = "#f38ba8"
+go = "#a6e3a1"
+script = "#cba6f7"
+image = "#a6e3a1"
+audio = "#cba6f7"
+video = "#f38ba8"
+archive = "#f9e2af"
+pdf = "#eba0ac"
+web = "#94e2d5"
+text = "@text-muted"
+config = "#94e2d5"
+default = "@text-secondary"
+
+[shape]
+radius = 14
+density = "comfortable"
+
+[fonts]
+ui = "Inter, Cantarell, sans-serif"
+mono = "JetBrains Mono, monospace"
+scale = 1.0

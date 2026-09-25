@@ -57,9 +57,12 @@ pub enum ViewMode {
 // ─── Application Config ───
 
 /// All user-configurable settings, persisted to disk as TOML.
+/// Missing keys fall back to `Default`, so older/partial files still load.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppConfig {
     // Appearance
+    /// Legacy theme name (pre-`theme.toml`); only used once to seed `theme.toml`.
     pub theme: String,
     pub icon_size: i32,
     pub view_mode: ViewMode,
