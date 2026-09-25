@@ -1,11 +1,10 @@
-use crate::config::AppConfig;
 use crate::filesystem;
 use gtk4::prelude::*;
 use gtk4::{DrawingArea, EventControllerMotion, EventControllerScroll, GestureClick, GestureDrag};
 use rand::Rng;
 use std::cell::RefCell;
 use std::f64::consts::PI;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 // ═══════════════════════════════════════════════
@@ -333,17 +332,13 @@ impl GraphState {
 // ═══════════════════════════════════════════════
 
 /// Creates the full interactive graph view widget for the given directory.
-pub fn build_graph_view(
-    current_path: Rc<RefCell<PathBuf>>,
-    _config: Rc<RefCell<AppConfig>>,
-) -> DrawingArea {
+pub fn build_graph_view(root: &Path) -> DrawingArea {
     let state = Rc::new(RefCell::new(GraphState::new()));
 
     // Initialise with root node (expanded)
     {
-        let path = current_path.borrow().clone();
         let mut s = state.borrow_mut();
-        let root_id = s.add_root(&path);
+        let root_id = s.add_root(&root.to_path_buf());
         s.expand_node(root_id);
     }
 
@@ -363,12 +358,14 @@ pub fn build_graph_view(
     }
 
     // ── Physics animation tick ──
+    // A tick callback is tied to the widget: it follows the display's frame
+    // clock and stops automatically once the view is removed (a global
+    // timeout kept running forever after switching views).
     {
         let state_c = state.clone();
-        let area_c = area.clone();
-        glib::timeout_add_local(std::time::Duration::from_millis(16), move || {
+        area.add_tick_callback(move |area, _clock| {
             state_c.borrow_mut().physics_step();
-            area_c.queue_draw();
+            area.queue_draw();
             glib::ControlFlow::Continue
         });
     }

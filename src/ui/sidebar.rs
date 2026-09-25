@@ -1,34 +1,20 @@
 use crate::config::AppConfig;
 use crate::filesystem;
+use crate::ui::context_menu::name_submitter;
+use crate::ui::state::AppState;
 use crate::ui::widgets;
 use gtk4::prelude::*;
 use gtk4::{
-    Align, ApplicationWindow, Box, Button, Label, Orientation, Popover, ScrolledWindow, Separator,
-    ToggleButton,
+    Align, Box, Button, Label, Orientation, Popover, ScrolledWindow, Separator, ToggleButton,
 };
-use std::cell::RefCell;
-use std::path::PathBuf;
 use std::rc::Rc;
-
-use crate::ui::content::refresh_content;
 
 // ═══════════════════════════════════════════════
 //  Sidebar Construction
 // ═══════════════════════════════════════════════
 
 /// Builds the complete sidebar widget (toolbar + places + file browser).
-/// Returns (sidebar_widget, nav_box, settings_toggle).
-pub fn build_sidebar(
-    current_path: Rc<RefCell<PathBuf>>,
-    selected_file_path: Rc<RefCell<Option<PathBuf>>>,
-    config: Rc<RefCell<AppConfig>>,
-    content_box: Box,
-    content_scroll: ScrolledWindow,
-    breadcrumb_label: Label,
-    inspector_info: Label,
-    window: ApplicationWindow,
-    css_provider: gtk4::CssProvider,
-) -> (Box, Box, ToggleButton) {
+pub fn build_sidebar(state: &Rc<AppState>) -> Box {
     let sidebar = Box::builder()
         .orientation(Orientation::Vertical)
         .css_classes(vec!["sidebar".to_string()])
@@ -49,6 +35,7 @@ pub fn build_sidebar(
     let settings_toggle = ToggleButton::builder()
         .icon_name("emblem-system-symbolic")
         .tooltip_text("Settings")
+        .action_name("win.show-settings")
         .css_classes(vec!["toolbar-btn".to_string()])
         .build();
 
@@ -100,126 +87,24 @@ pub fn build_sidebar(
         .build();
     sidebar.append(&sidebar_files_title);
 
-    let nav_box = Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(1)
-        .margin_start(4)
-        .margin_end(4)
-        .build();
-
     let sidebar_scroll = ScrolledWindow::builder()
         .hscrollbar_policy(gtk4::PolicyType::Never)
         .vexpand(true)
-        .child(&nav_box)
+        .child(&state.nav_box)
         .build();
     sidebar.append(&sidebar_scroll);
 
-    // ── Wire places shortcuts ──
-    bind_places_logic(
-        &places_box,
-        current_path.clone(),
-        nav_box.clone(),
-        content_box.clone(),
-        window.clone(),
-        breadcrumb_label.clone(),
-        inspector_info.clone(),
-        selected_file_path.clone(),
-        config.clone(),
-    );
+    bind_places_logic(&places_box, state);
+    setup_creation_popover(&new_item_btn, state);
 
-    // ── Wire creation popover ──
-    setup_creation_popover(
-        &new_item_btn,
-        current_path.clone(),
-        nav_box.clone(),
-        content_box.clone(),
-        window.clone(),
-        breadcrumb_label.clone(),
-        inspector_info.clone(),
-        selected_file_path.clone(),
-        config.clone(),
-    );
-
-    // ── Wire settings toggle ──
-    {
-        let content_scroll_c = content_scroll.clone();
-        let config_c = config.clone();
-        let css_c = css_provider;
-        let nav_box_c = nav_box.clone();
-        let content_box_c = content_box.clone();
-        let window_c = window.clone();
-        let breadcrumb_c = breadcrumb_label.clone();
-        let inspector_info_c = inspector_info.clone();
-        let selected_c = selected_file_path.clone();
-        let current_path_c = current_path.clone();
-
-        settings_toggle.connect_toggled(move |btn| {
-            content_scroll_c.set_child(gtk4::Widget::NONE);
-
-            if btn.is_active() {
-                let on_change: Rc<dyn Fn()> = {
-                    let nav_box_cc = nav_box_c.clone();
-                    let window_cc = window_c.clone();
-                    let breadcrumb_cc = breadcrumb_c.clone();
-                    let inspector_info_cc = inspector_info_c.clone();
-                    let selected_cc = selected_c.clone();
-                    let current_path_cc = current_path_c.clone();
-                    let config_cc = config_c.clone();
-                    Rc::new(move || {
-                        refresh_sidebar(
-                            &nav_box_cc,
-                            current_path_cc.clone(),
-                            &window_cc,
-                            &breadcrumb_cc,
-                            &inspector_info_cc,
-                            selected_cc.clone(),
-                            config_cc.clone(),
-                        );
-                    })
-                };
-                let settings_panel = crate::ui::settings::build_settings_panel(
-                    config_c.clone(),
-                    css_c.clone(),
-                    on_change,
-                );
-                let settings_scroll = ScrolledWindow::builder()
-                    .hscrollbar_policy(gtk4::PolicyType::Never)
-                    .vexpand(true)
-                    .hexpand(true)
-                    .child(&settings_panel)
-                    .build();
-                content_scroll_c.set_child(Some(&settings_scroll));
-            } else {
-                content_scroll_c.set_child(Some(&content_box_c));
-                refresh_content(
-                    &content_box_c,
-                    current_path_c.clone(),
-                    &inspector_info_c,
-                    selected_c.clone(),
-                    config_c.clone(),
-                );
-            }
-        });
-    }
-
-    (sidebar, nav_box, settings_toggle)
+    sidebar
 }
 
 // ═══════════════════════════════════════════════
 //  Places Shortcuts
 // ═══════════════════════════════════════════════
 
-fn bind_places_logic(
-    container: &Box,
-    current_path: Rc<RefCell<PathBuf>>,
-    nav_box: Box,
-    content_box: Box,
-    window: ApplicationWindow,
-    breadcrumb: Label,
-    inspector_info: Label,
-    selected_file_path: Rc<RefCell<Option<PathBuf>>>,
-    config: Rc<RefCell<AppConfig>>,
-) {
+fn bind_places_logic(container: &Box, state: &Rc<AppState>) {
     let places = vec![
         ("Home", "user-home-symbolic", dirs::home_dir()),
         ("Desktop", "user-desktop-symbolic", dirs::desktop_dir()),
@@ -241,30 +126,8 @@ fn bind_places_logic(
     for (name, icon, path_opt) in places {
         if let Some(path) = path_opt {
             let btn = widgets::create_place_row(name, icon);
-            let path_clone = path.clone();
-
-            let current_path = current_path.clone();
-            let nav_box = nav_box.clone();
-            let content_box = content_box.clone();
-            let window = window.clone();
-            let breadcrumb = breadcrumb.clone();
-            let inspector_info = inspector_info.clone();
-            let selected_file_path = selected_file_path.clone();
-            let config = config.clone();
-
-            btn.connect_clicked(move |_| {
-                *current_path.borrow_mut() = path_clone.clone();
-                refresh_all(
-                    &nav_box,
-                    &content_box,
-                    current_path.clone(),
-                    &window,
-                    &breadcrumb,
-                    &inspector_info,
-                    selected_file_path.clone(),
-                    config.clone(),
-                );
-            });
+            let state = state.clone();
+            btn.connect_clicked(move |_| state.navigate_to(path.clone()));
             container.append(&btn);
         }
     }
@@ -274,17 +137,7 @@ fn bind_places_logic(
 //  Creation Popover
 // ═══════════════════════════════════════════════
 
-fn setup_creation_popover(
-    parent_btn: &Button,
-    current_path: Rc<RefCell<PathBuf>>,
-    nav_box: Box,
-    content_box: Box,
-    window: ApplicationWindow,
-    breadcrumb: Label,
-    inspector_info: Label,
-    selected_file_path: Rc<RefCell<Option<PathBuf>>>,
-    config: Rc<RefCell<AppConfig>>,
-) {
+fn setup_creation_popover(parent_btn: &Button, state: &Rc<AppState>) {
     let popover = Popover::builder()
         .css_classes(vec!["context-menu".to_string()])
         .build();
@@ -299,7 +152,6 @@ fn setup_creation_popover(
         .margin_end(8)
         .build();
 
-    // Title label for clarity
     let title_label = Label::builder()
         .label("Create New")
         .css_classes(vec!["context-menu-title".to_string()])
@@ -336,193 +188,64 @@ fn setup_creation_popover(
     popover.set_child(Some(&pop_box));
 
     let popover_clone = popover.clone();
-    parent_btn.connect_clicked(move |_| {
-        popover_clone.popup();
+    parent_btn.connect_clicked(move |_| popover_clone.popup());
+
+    let submit_folder = name_submitter(&entry, &popover, {
+        let state = state.clone();
+        move |name| state.create(name, true)
+    });
+    let submit_file = name_submitter(&entry, &popover, {
+        let state = state.clone();
+        move |name| state.create(name, false)
     });
 
-    let wire_creation = |is_dir: bool| {
-        let entry = entry.clone();
-        let popover = popover.clone();
-        let current_path = current_path.clone();
-        let nav_box = nav_box.clone();
-        let content_box = content_box.clone();
-        let window = window.clone();
-        let breadcrumb = breadcrumb.clone();
-        let inspector_info = inspector_info.clone();
-        let selected_file_path = selected_file_path.clone();
-        let config = config.clone();
-
-        move |_: &Button| {
-            let name = entry.text();
-            if !name.is_empty() {
-                let parent = current_path.borrow();
-                let result = if is_dir {
-                    filesystem::create_directory(&parent, &name)
-                } else {
-                    filesystem::create_file(&parent, &name)
-                };
-                match result {
-                    Ok(_) => {
-                        entry.set_text("");
-                        popover.popdown();
-                        refresh_all(
-                            &nav_box,
-                            &content_box,
-                            current_path.clone(),
-                            &window,
-                            &breadcrumb,
-                            &inspector_info,
-                            selected_file_path.clone(),
-                            config.clone(),
-                        );
-                    }
-                    Err(e) => eprintln!("Creation failed: {}", e),
-                }
-            }
-        }
-    };
-
-    create_folder_btn.connect_clicked(wire_creation(true));
-    create_file_btn.connect_clicked(wire_creation(false));
+    // Enter creates a folder (the primary button).
+    {
+        let submit = submit_folder.clone();
+        entry.connect_activate(move |_| submit());
+    }
+    create_folder_btn.connect_clicked(move |_| submit_folder());
+    create_file_btn.connect_clicked(move |_| submit_file());
 }
 
 // ═══════════════════════════════════════════════
 //  Sidebar Refresh
 // ═══════════════════════════════════════════════
 
-/// Refreshes both sidebar and content.
-pub fn refresh_all(
-    nav_box: &Box,
-    content_box: &Box,
-    current_path: Rc<RefCell<PathBuf>>,
-    window: &ApplicationWindow,
-    breadcrumb: &Label,
-    inspector_info: &Label,
-    selected_file_path: Rc<RefCell<Option<PathBuf>>>,
-    config: Rc<RefCell<AppConfig>>,
-) {
-    refresh_sidebar(
-        nav_box,
-        current_path.clone(),
-        window,
-        breadcrumb,
-        inspector_info,
-        selected_file_path.clone(),
-        config.clone(),
-    );
-    refresh_content(
-        content_box,
-        current_path,
-        inspector_info,
-        selected_file_path,
-        config,
-    );
-}
-
-/// Refreshes the sidebar file browser.
-pub fn refresh_sidebar(
-    container: &Box,
-    current_path: Rc<RefCell<PathBuf>>,
-    window: &ApplicationWindow,
-    breadcrumb: &Label,
-    inspector_info: &Label,
-    selected_file_path: Rc<RefCell<Option<PathBuf>>>,
-    config: Rc<RefCell<AppConfig>>,
-) {
-    // Clear
+/// Refreshes the sidebar file browser for the current folder.
+pub fn refresh_sidebar(state: &Rc<AppState>) {
+    let container = &state.nav_box;
     while let Some(child) = container.first_child() {
         container.remove(&child);
     }
 
-    let path = current_path.borrow().clone();
-    let cfg = config.borrow().clone();
+    let path = state.current_path();
+    let cfg = state.config();
 
-    window.set_title(Some(&format!("Diptych — {}", path.to_string_lossy())));
-
-    // Simplified breadcrumb
-    let home = dirs::home_dir().unwrap_or_default();
-    let display_path = if path.starts_with(&home) {
-        format!("~/{}", path.strip_prefix(&home).unwrap_or(&path).display())
-    } else {
-        path.to_string_lossy().to_string()
-    };
-    breadcrumb.set_label(&display_path);
-
-    // Reset inspector
-    *selected_file_path.borrow_mut() = None;
-    inspector_info.set_label("Select a file to inspect");
-
-    // Go up button
-    if let Some(parent) = path.parent() {
-        let parent_path = parent.to_path_buf();
+    // Go up row
+    if path.parent().is_some() {
         let up_btn = widgets::create_go_up_row();
-
-        let cp = current_path.clone();
-        let cont = container.clone();
-        let win = window.clone();
-        let bc = breadcrumb.clone();
-        let info = inspector_info.clone();
-        let sel = selected_file_path.clone();
-        let cfg_c = config.clone();
-
-        up_btn.connect_clicked(move |_| {
-            *cp.borrow_mut() = parent_path.clone();
-            refresh_sidebar(
-                &cont,
-                cp.clone(),
-                &win,
-                &bc,
-                &info,
-                sel.clone(),
-                cfg_c.clone(),
-            );
-        });
+        up_btn.set_action_name(Some("win.go-up"));
         container.append(&up_btn);
     }
 
-    // List entries
+    // List entries (compact: no metadata columns)
     let files = filesystem::list_directory(&path, cfg.show_hidden);
-    let dummy_config = AppConfig {
+    let row_config = AppConfig {
         icon_size: 48,
         show_file_size: false,
         show_modified_date: false,
-        ..cfg.clone()
+        ..cfg
     };
 
-    for entry in &files {
-        let btn = widgets::create_file_row(entry, &dummy_config);
-        let entry_path = entry.path.clone();
-
-        let cp = current_path.clone();
-        let cont = container.clone();
-        let win = window.clone();
-        let bc = breadcrumb.clone();
-        let info = inspector_info.clone();
-        let sel = selected_file_path.clone();
-        let cfg_c = config.clone();
-        let is_dir = entry.is_dir;
-        let name = entry.name.clone();
-        let size_display = entry.size_display();
-        let mod_display = entry.modified_display();
-
+    for entry in files {
+        let btn = widgets::create_file_row(&entry, &row_config);
+        let state = state.clone();
         btn.connect_clicked(move |_| {
-            if is_dir {
-                *cp.borrow_mut() = entry_path.clone();
-                refresh_sidebar(
-                    &cont,
-                    cp.clone(),
-                    &win,
-                    &bc,
-                    &info,
-                    sel.clone(),
-                    cfg_c.clone(),
-                );
+            if entry.is_dir {
+                state.navigate_to(entry.path.clone());
             } else {
-                info.set_label(&format!(
-                    "{}  •  {}  •  {}",
-                    name, size_display, mod_display
-                ));
-                *sel.borrow_mut() = Some(entry_path.clone());
+                state.select(&entry);
             }
         });
         container.append(&btn);

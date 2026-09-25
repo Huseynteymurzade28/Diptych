@@ -1,7 +1,8 @@
-use crate::config::{AppConfig, IconTheme};
+use crate::config::IconTheme;
 use crate::filesystem;
 use crate::thumbnail;
 use crate::ui::drag_source;
+use crate::ui::state::AppState;
 use crate::ui::widgets::icon::{icon_css_class, icon_for_entry_themed};
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Button, Image, Label, Orientation};
@@ -28,14 +29,8 @@ const INDENT_PX: i32 = 20;
 /// Maximum recursive depth to prevent runaway expansion.
 const MAX_DEPTH: u32 = 12;
 
-/// Builds the full tree view starting from `root_path`.
-pub fn build_tree_view(
-    root_path: Rc<RefCell<PathBuf>>,
-    config: Rc<RefCell<AppConfig>>,
-    inspector_info: &Label,
-    selected_file_path: Rc<RefCell<Option<PathBuf>>>,
-    on_navigate: Rc<dyn Fn(PathBuf)>,
-) -> Box {
+/// Builds the full tree view rooted at the current folder.
+pub fn build_tree_view(state: &Rc<AppState>) -> Box {
     let container = Box::builder()
         .orientation(Orientation::Vertical)
         .spacing(0)
@@ -44,49 +39,29 @@ pub fn build_tree_view(
         .css_classes(vec!["tree-view-container".to_string()])
         .build();
 
-    let expanded: Rc<RefCell<HashSet<PathBuf>>> = Rc::new(RefCell::new(HashSet::new()));
-
     // Expand the root itself by default
-    {
-        let root = root_path.borrow().clone();
-        expanded.borrow_mut().insert(root);
-    }
+    let root = state.current_path();
+    let expanded: Rc<RefCell<HashSet<PathBuf>>> =
+        Rc::new(RefCell::new(HashSet::from([root.clone()])));
 
-    {
-        let root = root_path.borrow().clone();
-        render_tree(
-            &container,
-            &root,
-            0,
-            expanded.clone(),
-            root_path.clone(),
-            config.clone(),
-            inspector_info,
-            selected_file_path.clone(),
-            on_navigate.clone(),
-        );
-    }
-
+    render_tree(&container, &root, &root, 0, expanded, state);
     container
 }
 
 /// Recursively renders one level of the tree.
 fn render_tree(
     container: &Box,
+    root: &Path,
     dir_path: &Path,
     depth: u32,
     expanded: Rc<RefCell<HashSet<PathBuf>>>,
-    root_path: Rc<RefCell<PathBuf>>,
-    config: Rc<RefCell<AppConfig>>,
-    inspector_info: &Label,
-    selected_file_path: Rc<RefCell<Option<PathBuf>>>,
-    on_navigate: Rc<dyn Fn(PathBuf)>,
+    state: &Rc<AppState>,
 ) {
     if depth > MAX_DEPTH {
         return;
     }
 
-    let cfg = config.borrow().clone();
+    let cfg = state.config();
     let entries = filesystem::list_directory(dir_path, cfg.show_hidden);
 
     if entries.is_empty() && depth > 0 {
@@ -180,30 +155,12 @@ fn render_tree(
             let entry_path = entry.path.clone();
             let expanded_c = expanded.clone();
             let container_c = container.clone();
-            let root_c = root_path.clone();
-            let config_c = config.clone();
-            let info_c = inspector_info.clone();
-            let sel_c = selected_file_path.clone();
-            let nav_c = on_navigate.clone();
+            let root_c = root.to_path_buf();
+            let state_c = state.clone();
 
             arrow_btn.connect_clicked(move |_| {
-                {
-                    let mut set = expanded_c.borrow_mut();
-                    if set.contains(&entry_path) {
-                        set.remove(&entry_path);
-                    } else {
-                        set.insert(entry_path.clone());
-                    }
-                }
-                rebuild_tree(
-                    &container_c,
-                    expanded_c.clone(),
-                    root_c.clone(),
-                    config_c.clone(),
-                    &info_c,
-                    sel_c.clone(),
-                    nav_c.clone(),
-                );
+                toggle_expanded(&expanded_c, &entry_path);
+                rebuild_tree(&container_c, &root_c, expanded_c.clone(), &state_c);
             });
 
             row.append(&arrow_btn);
@@ -324,53 +281,27 @@ fn render_tree(
 
         // Highlight selected item
         {
-            let sel_path = selected_file_path.borrow();
-            if sel_path.as_ref() == Some(&entry.path) {
+            if state.selected().as_ref() == Some(&entry.path) {
                 row_btn.add_css_class("tree-row-selected");
             }
         }
 
         // ── Click handler ──
         {
-            let entry_path = entry.path.clone();
-            let is_dir = entry.is_dir;
-            let name = entry.name.clone();
-            let size_disp = entry.size_display();
-            let mod_disp = entry.modified_display();
-            let info_c = inspector_info.clone();
-            let sel_c = selected_file_path.clone();
-            let nav_c = on_navigate.clone();
+            let entry = entry.clone();
             let expanded_c = expanded.clone();
             let container_c = container.clone();
-            let root_c = root_path.clone();
-            let config_c = config.clone();
+            let root_c = root.to_path_buf();
+            let state_c = state.clone();
 
             row_btn.connect_clicked(move |_| {
-                if is_dir {
+                if entry.is_dir {
                     // Toggle expansion in-place (don't navigate away)
-                    {
-                        let mut set = expanded_c.borrow_mut();
-                        if set.contains(&entry_path) {
-                            set.remove(&entry_path);
-                        } else {
-                            set.insert(entry_path.clone());
-                        }
-                    }
-                    rebuild_tree(
-                        &container_c,
-                        expanded_c.clone(),
-                        root_c.clone(),
-                        config_c.clone(),
-                        &info_c,
-                        sel_c.clone(),
-                        nav_c.clone(),
-                    );
+                    toggle_expanded(&expanded_c, &entry.path);
+                    rebuild_tree(&container_c, &root_c, expanded_c.clone(), &state_c);
                 } else {
-                    info_c.set_label(&format!("{}  •  {}  •  {}", name, size_disp, mod_disp));
-                    *sel_c.borrow_mut() = Some(entry_path.clone());
-                    if let Err(e) = open::that(&entry_path) {
-                        eprintln!("Failed to open file: {}", e);
-                    }
+                    state_c.select(&entry);
+                    state_c.open(&entry.path);
                 }
             });
         }
@@ -381,14 +312,11 @@ fn render_tree(
         if entry.is_dir && expanded.borrow().contains(&entry.path) {
             render_tree(
                 container,
+                root,
                 &entry.path,
                 depth + 1,
                 expanded.clone(),
-                root_path.clone(),
-                config.clone(),
-                inspector_info,
-                selected_file_path.clone(),
-                on_navigate.clone(),
+                state,
             );
         }
     }
@@ -426,30 +354,22 @@ fn tree_icon_name(entry: &crate::filesystem::Entry) -> &'static str {
     }
 }
 
+fn toggle_expanded(expanded: &RefCell<HashSet<PathBuf>>, path: &Path) {
+    let mut set = expanded.borrow_mut();
+    if !set.remove(path) {
+        set.insert(path.to_path_buf());
+    }
+}
+
 /// Clears and re-renders the full tree (called after expand/collapse toggle).
 fn rebuild_tree(
     container: &Box,
+    root: &Path,
     expanded: Rc<RefCell<HashSet<PathBuf>>>,
-    root_path: Rc<RefCell<PathBuf>>,
-    config: Rc<RefCell<AppConfig>>,
-    inspector_info: &Label,
-    selected_file_path: Rc<RefCell<Option<PathBuf>>>,
-    on_navigate: Rc<dyn Fn(PathBuf)>,
+    state: &Rc<AppState>,
 ) {
     while let Some(child) = container.first_child() {
         container.remove(&child);
     }
-
-    let root = root_path.borrow().clone();
-    render_tree(
-        container,
-        &root,
-        0,
-        expanded,
-        root_path,
-        config,
-        inspector_info,
-        selected_file_path,
-        on_navigate,
-    );
+    render_tree(container, root, root, 0, expanded, state);
 }
