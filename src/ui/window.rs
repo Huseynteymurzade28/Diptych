@@ -4,7 +4,7 @@ use crate::ui::{content, context_menu, graph_view, hamburger, inspector, sidebar
 use gtk4::prelude::*;
 use gtk4::{
     Align, Application, ApplicationWindow, Box, Button, CssProvider, Label, Orientation, Paned,
-    ScrolledWindow, StyleContext,
+    ScrolledWindow,
 };
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -29,8 +29,7 @@ pub fn build(app: &Application) {
     let theme = Theme::from_name(&config.borrow().theme);
     css_provider.load_from_data(&theme.to_css());
     if let Some(display) = gtk4::gdk::Display::default() {
-        #[allow(deprecated)]
-        StyleContext::add_provider_for_display(
+        gtk4::style_context_add_provider_for_display(
             &display,
             &css_provider,
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,

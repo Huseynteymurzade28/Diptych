@@ -54,11 +54,7 @@ pub fn attach_file_drag_source(
             .unwrap_or_else(|| "file".to_string());
 
         // Truncate long names for the ghost
-        let short_name = if display_name.len() > 30 {
-            format!("{}…", &display_name[..29])
-        } else {
-            display_name.clone()
-        };
+        let short_name = crate::core::truncate_chars(&display_name, 30);
 
         let icon_emoji = if is_dir { "📁" } else { "📄" };
         let ghost_text = format!(" {} {} ", icon_emoji, short_name);

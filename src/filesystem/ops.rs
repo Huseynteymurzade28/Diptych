@@ -1,3 +1,4 @@
+use gio::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -65,4 +66,19 @@ pub fn create_file(parent: &Path, name: &str) -> std::io::Result<PathBuf> {
     let new_path = parent.join(name);
     fs::File::create(&new_path)?;
     Ok(new_path)
+}
+
+/// Moves `path` to the freedesktop trash so it can be restored later.
+pub fn move_to_trash(path: &Path) -> Result<(), glib::Error> {
+    gio::File::for_path(path).trash(gio::Cancellable::NONE)
+}
+
+/// Permanently deletes `path` (recursively for directories). Cannot be undone.
+pub fn delete_permanently(path: &Path) -> std::io::Result<()> {
+    // symlink_metadata: a symlink to a directory must be unlinked, not followed.
+    if fs::symlink_metadata(path)?.is_dir() {
+        fs::remove_dir_all(path)
+    } else {
+        fs::remove_file(path)
+    }
 }
