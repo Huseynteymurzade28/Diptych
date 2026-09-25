@@ -39,7 +39,6 @@ pub fn supports_preview(path: &Path) -> bool {
 /// Builds a preview widget for the given file path.
 /// Returns a container that shows a spinner while loading,
 /// then replaces it with the actual thumbnail.
-#[allow(dead_code)]
 pub fn build_preview_widget(file_path: &Path, max_width: i32, max_height: i32) -> Box {
     let container = Box::builder()
         .orientation(Orientation::Vertical)

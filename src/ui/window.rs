@@ -1,9 +1,10 @@
-use crate::config::{persistence, AppConfig};
+use crate::config::{layout, persistence, AppConfig, LayoutConfig};
 use crate::theme::ThemeManager;
+use crate::ui::chrome::Chrome;
 use crate::ui::state::{AppState, StateWidgets};
 use crate::ui::{context_menu, hamburger, inspector, sidebar};
 use gtk4::prelude::*;
-use gtk4::{Align, ApplicationWindow, Box, Button, Label, Orientation, Paned, ScrolledWindow};
+use gtk4::{Box, Orientation, ScrolledWindow};
 use std::path::PathBuf;
 
 // ═══════════════════════════════════════════════
@@ -11,77 +12,44 @@ use std::path::PathBuf;
 // ═══════════════════════════════════════════════
 
 pub fn build(app: &adw::Application) {
-    // ── Load persisted config ──
     let config = AppConfig::load();
+    let config_dir = persistence::config_dir();
+
+    // ── Theme (theme.toml + user.css, hot-reloaded) ──
+    let theme = ThemeManager::new(&config_dir, &config.theme);
+
+    // ── Layout (layout.toml, hot-reloaded) ──
+    if let Err(e) = layout::seed(&config_dir) {
+        eprintln!("[layout] Could not create {}: {}", layout::LAYOUT_FILE, e);
+    }
+    let layout = LayoutConfig::load(&config_dir).unwrap_or_else(|e| {
+        eprintln!("[layout] {}: {} (using defaults)", layout::LAYOUT_FILE, e);
+        LayoutConfig::default()
+    });
 
     let start_path = dirs::home_dir()
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_else(|| PathBuf::from("/"));
 
-    // ── Theme (theme.toml + user.css, hot-reloaded) ──
-    let theme = ThemeManager::new(&persistence::config_dir(), &config.theme);
-
-    // ── Window ──
-    let window = ApplicationWindow::builder()
+    let window = adw::ApplicationWindow::builder()
         .application(app)
         .title("Diptych")
         .default_width(config.window_width)
         .default_height(config.window_height)
+        // Small enough for a quarter-screen tile.
+        .width_request(360)
+        .height_request(300)
         .build();
 
-    // ═══════════════════════════════════════════
-    //  Layout: Paned  [Sidebar | Content+Header]
-    // ═══════════════════════════════════════════
-
-    let paned = Paned::builder()
-        .orientation(Orientation::Horizontal)
-        .position(220)
-        .build();
-
-    // ── Right side: header + content + inspector ──
-    let right_vbox = Box::builder()
+    // ── Panes ──
+    let places = Box::builder()
         .orientation(Orientation::Vertical)
-        .hexpand(true)
-        .vexpand(true)
+        .spacing(1)
+        .margin_start(6)
+        .margin_end(6)
         .build();
+    let sidebar_widget = sidebar::build_sidebar(&places);
 
-    // Header bar
-    let header_bar = Box::builder()
-        .orientation(Orientation::Horizontal)
-        .spacing(8)
-        .css_classes(vec!["header-bar".to_string()])
-        .build();
-
-    let go_up_btn = Button::builder()
-        .icon_name("go-up-symbolic")
-        .tooltip_text("Go Up")
-        .action_name("win.go-up")
-        .css_classes(vec!["toolbar-btn".to_string()])
-        .build();
-
-    let breadcrumb_label = Label::builder()
-        .label("~")
-        .css_classes(vec!["breadcrumb-label-active".to_string()])
-        .halign(Align::Start)
-        .hexpand(true)
-        .xalign(0.0)
-        .ellipsize(gtk4::pango::EllipsizeMode::Start)
-        .build();
-
-    let view_toggle_btn = Button::builder()
-        .tooltip_text("Toggle View Mode (Grid / List / Graph / Tree)")
-        .action_name("win.cycle-view")
-        .css_classes(vec!["toolbar-btn".to_string()])
-        .build();
-
-    header_bar.append(&go_up_btn);
-    header_bar.append(&breadcrumb_label);
-    header_bar.append(&view_toggle_btn);
-    header_bar.append(&hamburger::build_hamburger_menu());
-
-    right_vbox.append(&header_bar);
-
-    // Content area
     let content_box = Box::builder()
         .orientation(Orientation::Vertical)
         .spacing(4)
@@ -90,27 +58,29 @@ pub fn build(app: &adw::Application) {
         .margin_end(12)
         .margin_bottom(8)
         .build();
-
     let content_scroll = ScrolledWindow::builder()
-        .hscrollbar_policy(gtk4::PolicyType::Automatic)
+        .hscrollbar_policy(gtk4::PolicyType::Never)
         .vexpand(true)
         .hexpand(true)
         .child(&content_box)
+        .css_classes(["content-view"])
         .build();
 
-    right_vbox.append(&content_scroll);
-
-    // Inspector bar
-    let (inspector_bar, inspector_info) = inspector::build_inspector_bar();
-    right_vbox.append(&inspector_bar);
-
-    // Sidebar file list (filled by `sidebar::refresh_sidebar`)
-    let nav_box = Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(1)
-        .margin_start(4)
-        .margin_end(4)
+    let inspector_pane = inspector::build_pane();
+    let inspector_scroll = ScrolledWindow::builder()
+        .hscrollbar_policy(gtk4::PolicyType::Never)
+        .child(&inspector_pane)
+        .css_classes(["inspector"])
         .build();
+
+    let chrome = Chrome::new(
+        &window,
+        &sidebar_widget,
+        &content_scroll,
+        &inspector_scroll,
+        &hamburger::build_hamburger_menu(),
+    );
+    chrome.apply(&layout);
 
     // ═══════════════════════════════════════════
     //  Shared state
@@ -118,18 +88,20 @@ pub fn build(app: &adw::Application) {
 
     let state = AppState::new(
         config,
+        layout,
         start_path,
         StateWidgets {
             window: window.clone(),
             theme,
+            chrome,
             content_scroll,
             content_box: content_box.clone(),
-            nav_box,
-            breadcrumb: breadcrumb_label,
-            inspector_info,
-            view_toggle_btn,
+            places,
+            inspector: inspector_pane,
         },
     );
+    sidebar::bind_places(&state);
+    sidebar::setup_creation_popover(&state);
 
     // Save window size on close
     {
@@ -143,15 +115,36 @@ pub fn build(app: &adw::Application) {
         });
     }
 
-    // Assemble paned
-    paned.set_start_child(Some(&sidebar::build_sidebar(&state)));
-    paned.set_end_child(Some(&right_vbox));
-    window.set_child(Some(&paned));
-
     // Right-click on empty content area
     context_menu::attach_background_context_menu(&content_box, &state);
 
+    // Left-click on empty space clears the selection. Item buttons claim
+    // their own clicks, so this only fires between/below items.
+    {
+        let gesture = gtk4::GestureClick::builder().button(1).build();
+        let state_c = state.clone();
+        gesture.connect_pressed(move |_, _, _, _| state_c.clear_selection());
+        state.content_scroll.add_controller(gesture);
+    }
+
+    // Hot-reload layout.toml; the watch lives as long as the window.
+    let watch = {
+        let weak = std::rc::Rc::downgrade(&state);
+        crate::config::watch::watch(
+            &[config_dir],
+            |name| name == std::path::Path::new(layout::LAYOUT_FILE),
+            move || {
+                if let Some(state) = weak.upgrade() {
+                    state.reload_layout();
+                }
+            },
+        )
+    };
+    window.connect_destroy(move |_| {
+        let _ = &watch;
+    });
+
     state.refresh();
     window.present();
-    crate::ui::snapshot::schedule_if_requested(&window);
+    crate::ui::snapshot::schedule_if_requested(window.upcast_ref());
 }

@@ -92,18 +92,29 @@ pub fn refresh_content(state: &Rc<AppState>) {
 // ═══════════════════════════════════════════════
 
 fn wire_item(btn: &Button, entry: &filesystem::Entry, state: &Rc<AppState>) {
-    // Left-click: enter folder, or select + open file
+    // Click: select (or open, in single-click mode). Double click: open.
     {
         let entry = entry.clone();
         let state = state.clone();
-        btn.connect_clicked(move |_| {
-            if entry.is_dir {
-                state.navigate_to(entry.path.clone());
-            } else {
-                state.select(&entry);
-                state.open(&entry.path);
+        btn.connect_clicked(move |b| state.click(&entry, b.upcast_ref()));
+    }
+    if state.config.borrow().open_with == crate::config::OpenWith::DoubleClick {
+        let gesture = gtk4::GestureClick::builder()
+            .button(1)
+            .propagation_phase(gtk4::PropagationPhase::Capture)
+            .build();
+        let entry = entry.clone();
+        let state = state.clone();
+        gesture.connect_pressed(move |_, n_press, _, _| {
+            if n_press == 2 {
+                state.activate(&entry);
             }
         });
+        btn.add_controller(gesture);
+    }
+    // Keep the highlight when the view is rebuilt (theme/config changes).
+    if state.selected().as_deref() == Some(entry.path.as_path()) {
+        state.select(entry, Some(btn.upcast_ref()));
     }
 
     // Right-click context menu

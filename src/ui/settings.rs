@@ -1,4 +1,4 @@
-use crate::config::{GroupBy, IconTheme, ViewMode};
+use crate::config::{GroupBy, IconTheme, OpenWith, ViewMode};
 use crate::ui::state::AppState;
 use gtk4::prelude::*;
 use gtk4::{Align, Box, DropDown, Label, Orientation, Scale, Separator, StringList, Switch};
@@ -142,6 +142,40 @@ pub fn build_settings_panel(state: &Rc<AppState>) -> Box {
             if let Some(name) = IconTheme::all_names().get(dd.selected() as usize) {
                 state_c.update_config(|cfg| cfg.icon_theme = IconTheme::from_name(name));
             }
+        });
+        row.append(&dropdown);
+        panel.append(&row);
+    }
+
+    panel.append(
+        &Separator::builder()
+            .orientation(Orientation::Horizontal)
+            .margin_top(4)
+            .margin_bottom(4)
+            .build(),
+    );
+
+    // ═══════════════════════════════════
+    //  BEHAVIOR
+    // ═══════════════════════════════════
+    panel.append(&section_title("BEHAVIOR"));
+    {
+        let row = setting_row("Open Items With");
+        let dropdown = DropDown::builder()
+            .model(&StringList::new(&["Double Click", "Single Click"]))
+            .build();
+        dropdown.set_selected(match config.borrow().open_with {
+            OpenWith::DoubleClick => 0,
+            OpenWith::SingleClick => 1,
+        });
+        let state_c = state.clone();
+        dropdown.connect_selected_notify(move |dd| {
+            let value = if dd.selected() == 1 {
+                OpenWith::SingleClick
+            } else {
+                OpenWith::DoubleClick
+            };
+            state_c.update_config(|cfg| cfg.open_with = value);
         });
         row.append(&dropdown);
         panel.append(&row);

@@ -1,9 +1,10 @@
-use crate::config::{AppConfig, ViewMode};
+use crate::config::{AppConfig, LayoutConfig, OpenWith, ViewMode};
 use crate::filesystem::{self, Entry};
 use crate::theme::ThemeManager;
-use crate::ui::{content, settings, sidebar};
-use gtk4::prelude::*;
-use gtk4::{ApplicationWindow, Box, Button, Label, ScrolledWindow};
+use crate::ui::chrome::Chrome;
+use crate::ui::{content, inspector, settings, sidebar};
+use adw::prelude::*;
+use gtk4::{Box, ScrolledWindow};
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -16,54 +17,66 @@ use std::rc::Rc;
 //
 // Rules:
 //   • Views never mutate the current path directly — they call
-//     `navigate_to()`, which refreshes *every* view, so the breadcrumb,
-//     title, sidebar and content can never disagree.
+//     `navigate_to()`, which refreshes *every* view, so the path bar,
+//     title, sidebar, content and inspector can never disagree.
 //   • File operations live here, so every menu / shortcut / button
 //     triggers the exact same code path.
 
 pub struct AppState {
     pub config: RefCell<AppConfig>,
+    pub layout: RefCell<LayoutConfig>,
     current_path: RefCell<PathBuf>,
     selected: RefCell<Option<PathBuf>>,
+    /// The highlighted item widget, to un-highlight it on the next select.
+    selected_widget: RefCell<glib::WeakRef<gtk4::Widget>>,
+    back: RefCell<Vec<PathBuf>>,
+    forward: RefCell<Vec<PathBuf>>,
     settings_visible: Cell<bool>,
 
-    pub window: ApplicationWindow,
+    pub window: adw::ApplicationWindow,
     pub theme: Rc<ThemeManager>,
+    pub chrome: Chrome,
     pub content_scroll: ScrolledWindow,
     pub content_box: Box,
-    pub nav_box: Box,
-    pub breadcrumb: Label,
-    pub inspector_info: Label,
-    pub view_toggle_btn: Button,
+    /// Place rows in the sidebar (highlighted when current).
+    pub places: Box,
+    pub inspector: Box,
 }
 
 /// Widgets the state needs to drive; built by `window::build`.
 pub struct StateWidgets {
-    pub window: ApplicationWindow,
+    pub window: adw::ApplicationWindow,
     pub theme: Rc<ThemeManager>,
+    pub chrome: Chrome,
     pub content_scroll: ScrolledWindow,
     pub content_box: Box,
-    pub nav_box: Box,
-    pub breadcrumb: Label,
-    pub inspector_info: Label,
-    pub view_toggle_btn: Button,
+    pub places: Box,
+    pub inspector: Box,
 }
 
 impl AppState {
-    pub fn new(config: AppConfig, start_path: PathBuf, w: StateWidgets) -> Rc<Self> {
+    pub fn new(
+        config: AppConfig,
+        layout: LayoutConfig,
+        start_path: PathBuf,
+        w: StateWidgets,
+    ) -> Rc<Self> {
         let state = Rc::new(Self {
             config: RefCell::new(config),
+            layout: RefCell::new(layout),
             current_path: RefCell::new(start_path),
             selected: RefCell::new(None),
+            selected_widget: RefCell::new(glib::WeakRef::new()),
+            back: RefCell::new(vec![]),
+            forward: RefCell::new(vec![]),
             settings_visible: Cell::new(false),
             window: w.window,
             theme: w.theme,
+            chrome: w.chrome,
             content_scroll: w.content_scroll,
             content_box: w.content_box,
-            nav_box: w.nav_box,
-            breadcrumb: w.breadcrumb,
-            inspector_info: w.inspector_info,
-            view_toggle_btn: w.view_toggle_btn,
+            places: w.places,
+            inspector: w.inspector,
         });
         install_actions(&state);
         state
@@ -92,9 +105,29 @@ impl AppState {
             eprintln!("Not a directory: {}", path.display());
             return;
         }
-        *self.current_path.borrow_mut() = path;
-        self.clear_selection();
-        self.refresh();
+        let previous = self.current_path();
+        if previous == path {
+            return;
+        }
+        self.back.borrow_mut().push(previous);
+        self.forward.borrow_mut().clear();
+        self.set_path(path);
+    }
+
+    pub fn go_back(self: &Rc<Self>) {
+        let target = self.back.borrow_mut().pop();
+        if let Some(path) = target {
+            self.forward.borrow_mut().push(self.current_path());
+            self.set_path(path);
+        }
+    }
+
+    pub fn go_forward(self: &Rc<Self>) {
+        let target = self.forward.borrow_mut().pop();
+        if let Some(path) = target {
+            self.back.borrow_mut().push(self.current_path());
+            self.set_path(path);
+        }
     }
 
     pub fn go_up(self: &Rc<Self>) {
@@ -104,55 +137,110 @@ impl AppState {
         }
     }
 
-    /// Re-reads the current folder and redraws header, sidebar and content.
+    fn set_path(self: &Rc<Self>, path: PathBuf) {
+        *self.current_path.borrow_mut() = path;
+        *self.selected.borrow_mut() = None;
+        self.refresh();
+    }
+
+    /// Opens a folder (navigates) or a file (default app).
+    pub fn activate(self: &Rc<Self>, entry: &Entry) {
+        if entry.is_dir {
+            self.navigate_to(entry.path.clone());
+        } else {
+            self.open(&entry.path);
+        }
+    }
+
+    /// Re-reads the current folder and redraws every view.
     pub fn refresh(self: &Rc<Self>) {
         // Drop the selection if the file vanished (deleted / renamed).
         let gone = self.selected.borrow().as_ref().is_some_and(|p| !p.exists());
         if gone {
-            self.clear_selection();
+            *self.selected.borrow_mut() = None;
         }
 
         self.refresh_header();
-        sidebar::refresh_sidebar(self);
+        sidebar::refresh_places(self);
         if !self.settings_visible.get() {
             content::refresh_content(self);
         }
+        inspector::refresh(self);
     }
 
-    fn refresh_header(&self) {
+    fn refresh_header(self: &Rc<Self>) {
         let path = self.current_path();
-        self.window
-            .set_title(Some(&format!("Diptych — {}", path.to_string_lossy())));
-
-        let home = dirs::home_dir().unwrap_or_default();
-        let display_path = match path.strip_prefix(&home) {
-            Ok(rel) if rel.as_os_str().is_empty() => "~".to_string(),
-            Ok(rel) => format!("~/{}", rel.display()),
-            Err(_) => path.to_string_lossy().to_string(),
-        };
-        self.breadcrumb.set_label(&display_path);
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "/".into());
+        self.window.set_title(Some(&format!("{} — Diptych", name)));
+        sidebar::refresh_path_bar(self);
 
         let cfg = self.config.borrow();
-        self.view_toggle_btn
-            .set_icon_name(view_mode_icon(&cfg.view_mode));
-        set_action_state(&self.window, "toggle-hidden", cfg.show_hidden);
+        set_action_state(&self.window, "toggle-hidden", cfg.show_hidden.to_variant());
+        set_action_state(
+            &self.window,
+            "view-mode",
+            view_mode_id(&cfg.view_mode).to_variant(),
+        );
+        set_action_enabled(&self.window, "back", !self.back.borrow().is_empty());
+        set_action_enabled(&self.window, "forward", !self.forward.borrow().is_empty());
+        set_action_enabled(&self.window, "go-up", path.parent().is_some());
     }
 
     // ─── Selection ───
 
-    pub fn select(&self, entry: &Entry) {
+    /// Selects `entry`; `widget` (if any) gets the `.selected` highlight.
+    pub fn select(self: &Rc<Self>, entry: &Entry, widget: Option<&gtk4::Widget>) {
+        if let Some(old) = self.selected_widget.borrow().upgrade() {
+            old.remove_css_class("selected");
+        }
+        if let Some(w) = widget {
+            w.add_css_class("selected");
+        }
+        self.selected_widget.borrow().set(widget);
         *self.selected.borrow_mut() = Some(entry.path.clone());
-        self.inspector_info.set_label(&format!(
-            "{}  •  {}  •  {}",
-            entry.name,
-            entry.size_display(),
-            entry.modified_display()
-        ));
+        inspector::refresh(self);
     }
 
-    pub fn clear_selection(&self) {
+    pub fn clear_selection(self: &Rc<Self>) {
+        if self.selected.borrow().is_none() {
+            return;
+        }
+        if let Some(old) = self.selected_widget.borrow().upgrade() {
+            old.remove_css_class("selected");
+        }
         *self.selected.borrow_mut() = None;
-        self.inspector_info.set_label("Select a file to inspect");
+        inspector::refresh(self);
+    }
+
+    /// What a click on an item does, per the "open with" preference.
+    pub fn click(self: &Rc<Self>, entry: &Entry, widget: &gtk4::Widget) {
+        match self.config.borrow().open_with {
+            OpenWith::SingleClick => {}
+            OpenWith::DoubleClick => {
+                self.select(entry, Some(widget));
+                return;
+            }
+        }
+        self.activate(entry);
+    }
+
+    // ─── Layout ───
+
+    /// Re-reads layout.toml and re-applies it (hot reload).
+    pub fn reload_layout(self: &Rc<Self>) {
+        let dir = crate::config::persistence::config_dir();
+        match LayoutConfig::load(&dir) {
+            Ok(layout) => {
+                self.chrome.apply(&layout);
+                *self.layout.borrow_mut() = layout;
+                inspector::refresh(self);
+                println!("[layout] Applied layout.toml");
+            }
+            Err(e) => eprintln!("[layout] layout.toml: {} (keeping previous layout)", e),
+        }
     }
 
     // ─── Config ───
@@ -165,6 +253,10 @@ impl AppState {
             cfg.save();
         }
         self.refresh();
+    }
+
+    pub fn set_view_mode(self: &Rc<Self>, mode: ViewMode) {
+        self.update_config(|cfg| cfg.view_mode = mode);
     }
 
     pub fn cycle_view_mode(self: &Rc<Self>) {
@@ -183,7 +275,7 @@ impl AppState {
     /// Swaps the content area between the file view and the settings panel.
     pub fn set_settings_visible(self: &Rc<Self>, visible: bool) {
         self.settings_visible.set(visible);
-        set_action_state(&self.window, "show-settings", visible);
+        set_action_state(&self.window, "show-settings", visible.to_variant());
 
         if visible {
             let panel = settings::build_settings_panel(self);
@@ -290,6 +382,8 @@ fn install_actions(state: &Rc<AppState>) {
         state.window.add_action(&action);
     };
 
+    simple("back", |s| s.go_back());
+    simple("forward", |s| s.go_forward());
     simple("go-up", |s| s.go_up());
     simple("refresh", |s| s.refresh());
     simple("cycle-view", |s| s.cycle_view_mode());
@@ -313,40 +407,77 @@ fn install_actions(state: &Rc<AppState>) {
         |s, v| s.update_config(|cfg| cfg.show_hidden = v),
     );
     toggle("show-settings", false, |s, v| s.set_settings_visible(v));
+
+    // Radio-style: the view switcher buttons target "grid", "list", …
+    let view_mode = gio::SimpleAction::new_stateful(
+        "view-mode",
+        Some(glib::VariantTy::STRING),
+        &view_mode_id(&state.config.borrow().view_mode).to_variant(),
+    );
+    {
+        let s = state.clone();
+        view_mode.connect_change_state(move |_, value| {
+            if let Some(mode) = value
+                .and_then(|v| v.get::<String>())
+                .and_then(|id| view_mode_from_id(&id))
+            {
+                s.set_view_mode(mode);
+            }
+        });
+    }
+    state.window.add_action(&view_mode);
 }
 
-/// Updates a stateful boolean action without triggering its handler.
-fn set_action_state(window: &ApplicationWindow, name: &str, value: bool) {
+/// Updates a stateful action without triggering its handler.
+fn set_action_state(window: &adw::ApplicationWindow, name: &str, value: glib::Variant) {
     if let Some(action) = window
         .lookup_action(name)
         .and_downcast::<gio::SimpleAction>()
     {
-        if action.state().and_then(|v| v.get::<bool>()) != Some(value) {
-            action.set_state(&value.to_variant());
+        if action.state().as_ref() != Some(&value) {
+            action.set_state(&value);
         }
     }
 }
 
-fn show_about(window: &ApplicationWindow) {
-    gtk4::AboutDialog::builder()
-        .transient_for(window)
-        .modal(true)
-        .program_name("Diptych")
-        .version(env!("CARGO_PKG_VERSION"))
-        .comments("A modern GTK4 file manager built with Rust.")
-        .website("https://github.com/Huseynteymurzade28/Diptych")
-        .license_type(gtk4::License::MitX11)
-        .build()
-        .present();
+fn set_action_enabled(window: &adw::ApplicationWindow, name: &str, enabled: bool) {
+    if let Some(action) = window
+        .lookup_action(name)
+        .and_downcast::<gio::SimpleAction>()
+    {
+        action.set_enabled(enabled);
+    }
 }
 
-pub fn view_mode_icon(mode: &ViewMode) -> &'static str {
+fn show_about(window: &adw::ApplicationWindow) {
+    adw::AboutDialog::builder()
+        .application_name("Diptych")
+        .version(env!("CARGO_PKG_VERSION"))
+        .comments("A deeply customizable GTK4 file manager built with Rust.")
+        .website("https://github.com/Huseynteymurzade28/Diptych")
+        .issue_url("https://github.com/Huseynteymurzade28/Diptych/issues")
+        .license_type(gtk4::License::MitX11)
+        .build()
+        .present(Some(window));
+}
+
+pub fn view_mode_id(mode: &ViewMode) -> &'static str {
     match mode {
-        ViewMode::Grid => "view-grid-symbolic",
-        ViewMode::List => "view-list-symbolic",
-        ViewMode::Graph => "network-workgroup-symbolic",
-        ViewMode::Tree => "view-list-tree-symbolic",
+        ViewMode::Grid => "grid",
+        ViewMode::List => "list",
+        ViewMode::Graph => "graph",
+        ViewMode::Tree => "tree",
     }
+}
+
+fn view_mode_from_id(id: &str) -> Option<ViewMode> {
+    Some(match id {
+        "grid" => ViewMode::Grid,
+        "list" => ViewMode::List,
+        "graph" => ViewMode::Graph,
+        "tree" => ViewMode::Tree,
+        _ => return None,
+    })
 }
 
 /// Rejects names that would escape the folder or can't exist on disk.

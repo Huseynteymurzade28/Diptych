@@ -15,30 +15,10 @@ pub fn list_directory(path: &Path, include_hidden: bool) -> Vec<Entry> {
     match fs::read_dir(path) {
         Ok(entries) => {
             for entry in entries.flatten() {
-                let path = entry.path();
-                let file_name = entry.file_name().to_string_lossy().to_string();
-                let is_dir = path.is_dir();
-
-                if !include_hidden && file_name.starts_with('.') {
+                if !include_hidden && entry.file_name().to_string_lossy().starts_with('.') {
                     continue;
                 }
-
-                let metadata = fs::metadata(&path).ok();
-                let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
-                let modified = metadata.and_then(|m| m.modified().ok());
-                let extension = path
-                    .extension()
-                    .map(|e| e.to_string_lossy().to_string())
-                    .unwrap_or_default();
-
-                file_list.push(Entry {
-                    name: file_name,
-                    path,
-                    is_dir,
-                    size,
-                    modified,
-                    extension,
-                });
+                file_list.push(Entry::from_path(&entry.path()));
             }
         }
         Err(e) => eprintln!("Failed to read directory entries: {}", e),

@@ -40,6 +40,8 @@ Their sources live in [`src/theme/presets/`](../src/theme/presets). Copy one to
 | Key | Type | Meaning |
 |---|---|---|
 | `base` | string | Preset id to start from. Letters, digits, `-` and `_` only. |
+| `base-light` | string | Preset used when the desktop prefers a light style. Setting it implies `mode = "system"`. |
+| `mode` | string | `system` follows the desktop's light/dark preference; `dark` or `light` fix it. Without `base-light`, the preset's own `dark` flag decides. |
 | `name` | string | Display name in Settings. |
 | `dark` | bool | Tells libadwaita whether to draw its stock widgets dark or light. |
 
@@ -87,7 +89,7 @@ These are the colors for each file kind, used by the tree view names and by colo
 
 | Key | Default | Meaning |
 |---|---|---|
-| `ui` | `"Inter, Cantarell, sans-serif"` | Interface font family list |
+| `ui` | `"system"` | Interface font family list, or `"system"` for your desktop font |
 | `mono` | `"JetBrains Mono, monospace"` | Monospace font family list |
 | `scale` | `1.0` | Multiplies every font size (0.5–2.0) |
 
@@ -111,6 +113,13 @@ density = "compact"
 [fonts]
 ui = "IBM Plex Sans, sans-serif"
 scale = 1.05
+```
+
+Follow the desktop's light/dark switch:
+
+```toml
+base = "catppuccin-mocha"
+base-light = "cozy-latte"
 ```
 
 ## `user.css`

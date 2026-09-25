@@ -8,14 +8,15 @@
      radius 0.72           corner radius × factor, in px
      sp 6                  spacing in px, scaled by density
      fs 13                 font size in px, scaled by fonts.scale
-     font-ui, font-mono    font families
+     font-ui-rule          the UI font rule, or nothing for the system font
+     font-mono             monospace font family
    Anything here can be overridden from ~/.config/diptych/user.css.
    ═══ */
 /* ── Base ── */
 window {
     background-color: {{window}};
     color: {{text}};
-    font-family: {{font-ui}};
+    {{font-ui-rule}}
 }
 
 /* ── Sidebar ── */
@@ -585,4 +586,58 @@ switch:checked {
     border-radius: 99px;
     padding: {{sp 2}} {{sp 8}};
     margin-left: {{sp 4}};
+}
+
+/* ── Selection ── */
+.file-card.selected, .file-card.selected:hover {
+    background-color: {{accent/0.14}};
+    border-color: {{accent}};
+}
+.file-row.selected, .file-row.selected:hover {
+    background-color: {{accent/0.14}};
+    box-shadow: inset 3px 0 0 {{accent}};
+}
+.place-btn.active {
+    background-color: {{accent/0.14}};
+    font-weight: 600;
+}
+
+/* ── Path bar (header) ── */
+.path-bar {
+    background-color: {{surface}};
+    border-radius: {{radius 0.57}};
+    padding: 0 {{sp 4}};
+}
+.path-segment {
+    min-height: 0;
+    padding: {{sp 2}} {{sp 8}};
+    border-radius: {{radius 0.43}};
+    color: {{text-secondary}};
+    font-size: {{fs 13}};
+}
+.path-segment:hover {
+    background-color: {{hover}};
+    color: {{text}};
+}
+.path-segment.path-current {
+    color: {{text}};
+    font-weight: 700;
+}
+.path-sep {
+    color: {{text-muted}};
+    font-size: {{fs 12}};
+}
+
+/* ── Inspector pane ── */
+.inspector {
+    background-color: {{sidebar}};
+}
+.inspector-preview {
+    background-color: {{window}};
+    border-radius: {{radius 0.86}};
+}
+.inspector-details {
+    background-color: {{window}};
+    border-radius: {{radius 0.86}};
+    padding: {{sp 12}} {{sp 14}};
 }

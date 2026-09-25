@@ -44,6 +44,6 @@ radius = 14
 density = "comfortable"
 
 [fonts]
-ui = "Inter, Cantarell, sans-serif"
+ui = "system"        # desktop font (gtk-font-name); or e.g. "Inter, sans-serif"
 mono = "JetBrains Mono, monospace"
 scale = 1.0

@@ -1,111 +1,41 @@
-use crate::config::AppConfig;
-use crate::filesystem;
 use crate::ui::context_menu::name_submitter;
 use crate::ui::state::AppState;
 use crate::ui::widgets;
 use gtk4::prelude::*;
-use gtk4::{
-    Align, Box, Button, Label, Orientation, Popover, ScrolledWindow, Separator, ToggleButton,
-};
+use gtk4::{Align, Box, Button, Label, Orientation, Popover, ScrolledWindow};
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 // ═══════════════════════════════════════════════
-//  Sidebar Construction
+//  Sidebar (Places), Path Bar and "New" popover
 // ═══════════════════════════════════════════════
 
-/// Builds the complete sidebar widget (toolbar + places + file browser).
-pub fn build_sidebar(state: &Rc<AppState>) -> Box {
-    let sidebar = Box::builder()
-        .orientation(Orientation::Vertical)
-        .css_classes(vec!["sidebar".to_string()])
-        .width_request(200)
-        .build();
-
-    // ── Sidebar toolbar ──
-    let sidebar_toolbar = Box::builder()
-        .orientation(Orientation::Horizontal)
-        .spacing(4)
-        .margin_top(6)
-        .margin_bottom(2)
-        .margin_start(8)
-        .margin_end(8)
-        .css_classes(vec!["toolbar".to_string()])
-        .build();
-
-    let settings_toggle = ToggleButton::builder()
-        .icon_name("emblem-system-symbolic")
-        .tooltip_text("Settings")
-        .action_name("win.show-settings")
-        .css_classes(vec!["toolbar-btn".to_string()])
-        .build();
-
-    let new_item_btn = Button::builder()
-        .icon_name("list-add-symbolic")
-        .tooltip_text("New File / Folder")
-        .css_classes(vec!["toolbar-btn".to_string()])
-        .build();
-
-    let spacer = Box::builder().hexpand(true).build();
-
-    sidebar_toolbar.append(&settings_toggle);
-    sidebar_toolbar.append(&spacer);
-    sidebar_toolbar.append(&new_item_btn);
-    sidebar.append(&sidebar_toolbar);
-
-    // ── Places section ──
-    let places_title = Label::builder()
-        .label("PLACES")
-        .css_classes(vec!["sidebar-title".to_string()])
-        .halign(Align::Start)
-        .margin_top(8)
-        .build();
-    sidebar.append(&places_title);
-
-    let places_box = Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(1)
-        .margin_start(4)
-        .margin_end(4)
-        .build();
-    sidebar.append(&places_box);
-
-    sidebar.append(
-        &Separator::builder()
-            .orientation(Orientation::Horizontal)
+/// Builds the sidebar around `places` (filled later by `bind_places`).
+pub fn build_sidebar(places: &Box) -> gtk4::Widget {
+    let column = Box::builder().orientation(Orientation::Vertical).build();
+    column.append(
+        &Label::builder()
+            .label("PLACES")
+            .css_classes(["sidebar-title"])
+            .halign(Align::Start)
             .margin_top(8)
-            .margin_bottom(4)
-            .margin_start(12)
-            .margin_end(12)
             .build(),
     );
+    column.append(places);
 
-    // ── Current directory file list ──
-    let sidebar_files_title = Label::builder()
-        .label("BROWSER")
-        .css_classes(vec!["sidebar-title".to_string()])
-        .halign(Align::Start)
-        .build();
-    sidebar.append(&sidebar_files_title);
-
-    let sidebar_scroll = ScrolledWindow::builder()
+    ScrolledWindow::builder()
         .hscrollbar_policy(gtk4::PolicyType::Never)
         .vexpand(true)
-        .child(&state.nav_box)
-        .build();
-    sidebar.append(&sidebar_scroll);
-
-    bind_places_logic(&places_box, state);
-    setup_creation_popover(&new_item_btn, state);
-
-    sidebar
+        .child(&column)
+        .css_classes(["sidebar"])
+        .build()
+        .upcast()
 }
 
-// ═══════════════════════════════════════════════
-//  Places Shortcuts
-// ═══════════════════════════════════════════════
-
-fn bind_places_logic(container: &Box, state: &Rc<AppState>) {
-    let places = vec![
+/// Standard places. Each row keeps its path as tooltip, which is also how
+/// `refresh_places` finds the current one.
+pub fn bind_places(state: &Rc<AppState>) {
+    let places = [
         ("Home", "user-home-symbolic", dirs::home_dir()),
         ("Desktop", "user-desktop-symbolic", dirs::desktop_dir()),
         (
@@ -121,27 +51,116 @@ fn bind_places_logic(container: &Box, state: &Rc<AppState>) {
         ("Pictures", "folder-pictures-symbolic", dirs::picture_dir()),
         ("Music", "folder-music-symbolic", dirs::audio_dir()),
         ("Videos", "folder-videos-symbolic", dirs::video_dir()),
+        (
+            "Computer",
+            "drive-harddisk-symbolic",
+            Some(PathBuf::from("/")),
+        ),
     ];
 
-    for (name, icon, path_opt) in places {
-        if let Some(path) = path_opt {
-            let btn = widgets::create_place_row(name, icon);
-            let state = state.clone();
-            btn.connect_clicked(move |_| state.navigate_to(path.clone()));
-            container.append(&btn);
+    for (name, icon, path) in places {
+        // XDG dirs that don't exist (or equal $HOME) would be duplicates.
+        let Some(path) = path.filter(|p| p.is_dir()) else {
+            continue;
+        };
+        if name != "Home" && Some(&path) == dirs::home_dir().as_ref() {
+            continue;
         }
+        let btn = widgets::create_place_row(name, icon);
+        btn.set_tooltip_text(Some(&path.to_string_lossy()));
+        let state_c = state.clone();
+        btn.connect_clicked(move |_| state_c.navigate_to(path.clone()));
+        state.places.append(&btn);
     }
 }
 
-// ═══════════════════════════════════════════════
-//  Creation Popover
-// ═══════════════════════════════════════════════
+/// Highlights the place matching the current folder.
+pub fn refresh_places(state: &Rc<AppState>) {
+    let current = state.current_path().to_string_lossy().to_string();
+    let mut child = state.places.first_child();
+    while let Some(row) = child {
+        if row.tooltip_text().as_deref() == Some(current.as_str()) {
+            row.add_css_class("active");
+        } else {
+            row.remove_css_class("active");
+        }
+        child = row.next_sibling();
+    }
+}
 
-fn setup_creation_popover(parent_btn: &Button, state: &Rc<AppState>) {
-    let popover = Popover::builder()
-        .css_classes(vec!["context-menu".to_string()])
-        .build();
-    popover.set_parent(parent_btn);
+// ─── Path bar ───
+
+/// Rebuilds the clickable path segments: `Home / projects / Diptych`.
+pub fn refresh_path_bar(state: &Rc<AppState>) {
+    let bar = &state.chrome.path_bar;
+    while let Some(child) = bar.first_child() {
+        bar.remove(&child);
+    }
+
+    let path = state.current_path();
+    let segments = path_segments(&path, dirs::home_dir().as_deref());
+    let last = segments.len().saturating_sub(1);
+    for (i, (label, target)) in segments.into_iter().enumerate() {
+        if i > 0 {
+            bar.append(
+                &Label::builder()
+                    .label("/")
+                    .css_classes(["path-sep"])
+                    .build(),
+            );
+        }
+        let btn = Button::builder()
+            .label(&label)
+            .has_frame(false)
+            .css_classes(["path-segment"])
+            .build();
+        if i == last {
+            btn.add_css_class("path-current");
+        }
+        let state_c = state.clone();
+        btn.connect_clicked(move |_| state_c.navigate_to(target.clone()));
+        bar.append(&btn);
+    }
+
+    // Keep the current folder in view when the path is longer than the bar.
+    let bar = bar.clone();
+    glib::idle_add_local_once(move || {
+        if let Some(scroll) = bar
+            .ancestor(ScrolledWindow::static_type())
+            .and_downcast::<ScrolledWindow>()
+        {
+            let adj = scroll.hadjustment();
+            adj.set_value(adj.upper());
+        }
+    });
+}
+
+/// `(label, path)` per segment. Paths under `home` start at "Home".
+fn path_segments(path: &Path, home: Option<&Path>) -> Vec<(String, PathBuf)> {
+    let (mut acc, rest, mut out) =
+        match home.and_then(|h| path.strip_prefix(h).ok().map(|r| (h, r))) {
+            Some((h, rel)) => (
+                h.to_path_buf(),
+                rel.to_path_buf(),
+                vec![("Home".to_string(), h.to_path_buf())],
+            ),
+            None => (
+                PathBuf::from("/"),
+                path.strip_prefix("/").unwrap_or(path).to_path_buf(),
+                vec![("/".to_string(), PathBuf::from("/"))],
+            ),
+        };
+    for part in rest.components() {
+        acc.push(part);
+        out.push((part.as_os_str().to_string_lossy().to_string(), acc.clone()));
+    }
+    out
+}
+
+// ─── "New" popover (header bar) ───
+
+pub fn setup_creation_popover(state: &Rc<AppState>) {
+    let popover = Popover::builder().css_classes(["context-menu"]).build();
 
     let pop_box = Box::builder()
         .orientation(Orientation::Vertical)
@@ -154,10 +173,9 @@ fn setup_creation_popover(parent_btn: &Button, state: &Rc<AppState>) {
 
     let title_label = Label::builder()
         .label("Create New")
-        .css_classes(vec!["context-menu-title".to_string()])
+        .css_classes(["context-menu-title"])
         .halign(Align::Start)
         .build();
-
     let entry = gtk4::Entry::builder().placeholder_text("Name…").build();
 
     let btn_row = Box::builder()
@@ -165,20 +183,14 @@ fn setup_creation_popover(parent_btn: &Button, state: &Rc<AppState>) {
         .spacing(6)
         .halign(Align::End)
         .build();
-
     let create_file_btn = Button::builder()
-        .label("  File  ")
-        .css_classes(vec![
-            "btn-secondary".to_string(),
-            "creation-btn".to_string(),
-        ])
+        .label("File")
+        .css_classes(["btn-secondary", "creation-btn"])
         .build();
-
     let create_folder_btn = Button::builder()
-        .label("  Folder  ")
-        .css_classes(vec!["btn-primary".to_string(), "creation-btn".to_string()])
+        .label("Folder")
+        .css_classes(["btn-primary", "creation-btn"])
         .build();
-
     btn_row.append(&create_file_btn);
     btn_row.append(&create_folder_btn);
 
@@ -186,9 +198,7 @@ fn setup_creation_popover(parent_btn: &Button, state: &Rc<AppState>) {
     pop_box.append(&entry);
     pop_box.append(&btn_row);
     popover.set_child(Some(&pop_box));
-
-    let popover_clone = popover.clone();
-    parent_btn.connect_clicked(move |_| popover_clone.popup());
+    state.chrome.new_button.set_popover(Some(&popover));
 
     let submit_folder = name_submitter(&entry, &popover, {
         let state = state.clone();
@@ -208,46 +218,37 @@ fn setup_creation_popover(parent_btn: &Button, state: &Rc<AppState>) {
     create_file_btn.connect_clicked(move |_| submit_file());
 }
 
-// ═══════════════════════════════════════════════
-//  Sidebar Refresh
-// ═══════════════════════════════════════════════
+#[cfg(test)]
+mod tests {
+    use super::path_segments;
+    use std::path::{Path, PathBuf};
 
-/// Refreshes the sidebar file browser for the current folder.
-pub fn refresh_sidebar(state: &Rc<AppState>) {
-    let container = &state.nav_box;
-    while let Some(child) = container.first_child() {
-        container.remove(&child);
+    fn labels(path: &str, home: Option<&str>) -> Vec<String> {
+        path_segments(Path::new(path), home.map(Path::new))
+            .into_iter()
+            .map(|(l, _)| l)
+            .collect()
     }
 
-    let path = state.current_path();
-    let cfg = state.config();
-
-    // Go up row
-    if path.parent().is_some() {
-        let up_btn = widgets::create_go_up_row();
-        up_btn.set_action_name(Some("win.go-up"));
-        container.append(&up_btn);
+    #[test]
+    fn segments_under_home_start_at_home() {
+        assert_eq!(
+            labels("/home/u/dev/Diptych", Some("/home/u")),
+            ["Home", "dev", "Diptych"]
+        );
+        assert_eq!(labels("/home/u", Some("/home/u")), ["Home"]);
+        let segs = path_segments(Path::new("/home/u/dev"), Some(Path::new("/home/u")));
+        assert_eq!(segs[1].1, PathBuf::from("/home/u/dev"));
     }
 
-    // List entries (compact: no metadata columns)
-    let files = filesystem::list_directory(&path, cfg.show_hidden);
-    let row_config = AppConfig {
-        icon_size: 48,
-        show_file_size: false,
-        show_modified_date: false,
-        ..cfg
-    };
-
-    for entry in files {
-        let btn = widgets::create_file_row(&entry, &row_config);
-        let state = state.clone();
-        btn.connect_clicked(move |_| {
-            if entry.is_dir {
-                state.navigate_to(entry.path.clone());
-            } else {
-                state.select(&entry);
-            }
-        });
-        container.append(&btn);
+    #[test]
+    fn segments_outside_home_start_at_root() {
+        assert_eq!(labels("/usr/share", Some("/home/u")), ["/", "usr", "share"]);
+        assert_eq!(labels("/", Some("/home/u")), ["/"]);
+        // A sibling that merely shares the prefix is not "under home".
+        assert_eq!(
+            labels("/home/user2", Some("/home/u")),
+            ["/", "home", "user2"]
+        );
     }
 }
