@@ -73,11 +73,25 @@ impl Density {
     }
 }
 
+/// How the light/dark variant is chosen.
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    /// Follow the desktop's dark-style preference: `base` when dark,
+    /// `base-light` when light (GNOME, KDE and others via the portal).
+    System,
+    Dark,
+    Light,
+}
+
 /// Raw contents of one theme file. Every field is optional.
 #[derive(Debug, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ThemeFile {
     pub base: Option<String>,
+    /// Preset used when the desktop prefers a light style (`mode = "system"`).
+    pub base_light: Option<String>,
+    pub mode: Option<Mode>,
     pub name: Option<String>,
     pub dark: Option<bool>,
     pub colors: BTreeMap<String, String>,
@@ -102,6 +116,22 @@ pub struct FontsFile {
 }
 
 impl ThemeFile {
+    /// Effective mode: explicit `mode`, else follow the system when a
+    /// light preset is configured, else fixed to the preset's own style.
+    pub fn mode(&self) -> Option<Mode> {
+        self.mode.or(self.base_light.as_ref().map(|_| Mode::System))
+    }
+
+    /// The preset to use given the desktop's current preference.
+    pub fn base_for(&self, system_dark: bool) -> Option<String> {
+        let light = || self.base_light.clone().or_else(|| self.base.clone());
+        match self.mode() {
+            Some(Mode::Light) => light(),
+            Some(Mode::System) if !system_dark => light(),
+            _ => self.base.clone(),
+        }
+    }
+
     pub fn parse(src: &str) -> Result<ThemeFile, String> {
         let file: ThemeFile = toml::from_str(src).map_err(|e| e.to_string())?;
         file.validate()?;
@@ -164,7 +194,8 @@ pub struct Theme {
     pub colors: BTreeMap<String, Rgba>,
     pub radius: f64,
     pub density: Density,
-    pub font_ui: String,
+    /// `None` = the desktop's font.
+    pub font_ui: Option<String>,
     pub font_mono: String,
     pub font_scale: f64,
 }
@@ -265,7 +296,7 @@ impl Theme {
             colors,
             radius: radius.unwrap_or(14.0),
             density: density.unwrap_or(Density::Comfortable),
-            font_ui: ui.unwrap_or_else(|| "Cantarell, sans-serif".into()),
+            font_ui: ui.filter(|f: &String| !f.trim().eq_ignore_ascii_case("system")),
             font_mono: mono.unwrap_or_else(|| "monospace".into()),
             font_scale: scale.unwrap_or(1.0),
         })
@@ -375,6 +406,38 @@ mod tests {
         assert!(err("[shape]\nradius = 500").contains("radius"));
         assert!(err("[fonts]\nui = \"x; } window { color: red\"").contains("must not contain"));
         assert!(err("colour = 1").contains("unknown field"));
+    }
+
+    #[test]
+    fn mode_picks_the_light_or_dark_base() {
+        let f = ThemeFile::parse("base = \"nord\"\nbase-light = \"cozy-latte\"").unwrap();
+        assert_eq!(
+            f.mode(),
+            Some(Mode::System),
+            "base-light implies following the system"
+        );
+        assert_eq!(f.base_for(true).as_deref(), Some("nord"));
+        assert_eq!(f.base_for(false).as_deref(), Some("cozy-latte"));
+
+        let f = ThemeFile::parse("base = \"nord\"\nbase-light = \"cozy-latte\"\nmode = \"dark\"")
+            .unwrap();
+        assert_eq!(f.base_for(false).as_deref(), Some("nord"));
+
+        let f = ThemeFile::parse("base = \"nord\"").unwrap();
+        assert_eq!(
+            f.mode(),
+            None,
+            "no base-light: fixed to the preset's own style"
+        );
+        assert_eq!(f.base_for(false).as_deref(), Some("nord"));
+        assert!(ThemeFile::parse("mode = \"auto\"").is_err());
+    }
+
+    #[test]
+    fn system_font_means_no_override() {
+        assert_eq!(resolve("").unwrap().font_ui, None);
+        let t = resolve("[fonts]\nui = \"Figtree\"").unwrap();
+        assert_eq!(t.font_ui.as_deref(), Some("Figtree"));
     }
 
     #[test]

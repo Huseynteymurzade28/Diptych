@@ -1,6 +1,7 @@
 // ─── UI Module ───
 // GTK4 widgets, layout panels, and window assembly.
 
+pub mod chrome;
 pub mod content;
 pub mod context_menu;
 pub mod drag_source;

@@ -143,7 +143,7 @@ pub fn attach_file_context_menu(
 
 /// Shows a small popover anchored to `anchor` asking for a name.
 /// `submit` performs the operation; its error is shown on the entry.
-fn show_name_dialog(
+pub fn show_name_dialog(
     anchor: &Widget,
     title: &str,
     button_label: &str,

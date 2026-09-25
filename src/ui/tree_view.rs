@@ -291,16 +291,31 @@ fn render_tree(
             let root_c = root.to_path_buf();
             let state_c = state.clone();
 
-            row_btn.connect_clicked(move |_| {
+            row_btn.connect_clicked(move |b| {
                 if entry.is_dir {
                     // Toggle expansion in-place (don't navigate away)
                     toggle_expanded(&expanded_c, &entry.path);
                     rebuild_tree(&container_c, &root_c, expanded_c.clone(), &state_c);
                 } else {
-                    state_c.select(&entry);
-                    state_c.open(&entry.path);
+                    state_c.click(&entry, b.upcast_ref());
                 }
             });
+        }
+
+        // Double click opens files (single-click mode opens on click already).
+        if !entry.is_dir && state.config.borrow().open_with == crate::config::OpenWith::DoubleClick
+        {
+            let gesture = gtk4::GestureClick::builder()
+                .button(1)
+                .propagation_phase(gtk4::PropagationPhase::Capture)
+                .build();
+            let (entry, state_c) = (entry.clone(), state.clone());
+            gesture.connect_pressed(move |_, n_press, _, _| {
+                if n_press == 2 {
+                    state_c.activate(&entry);
+                }
+            });
+            row_btn.add_controller(gesture);
         }
 
         container.append(&row_btn);

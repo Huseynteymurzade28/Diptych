@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 // ═══════════════════════════════════════════════
@@ -17,6 +17,25 @@ pub struct Entry {
 }
 
 impl Entry {
+    /// Builds an entry for `path` (follows symlinks for the metadata).
+    pub fn from_path(path: &Path) -> Entry {
+        let metadata = std::fs::metadata(path).ok();
+        Entry {
+            name: path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.to_string_lossy().to_string()),
+            path: path.to_path_buf(),
+            is_dir: metadata.as_ref().is_some_and(|m| m.is_dir()),
+            size: metadata.as_ref().map(|m| m.len()).unwrap_or(0),
+            modified: metadata.and_then(|m| m.modified().ok()),
+            extension: path
+                .extension()
+                .map(|e| e.to_string_lossy().to_string())
+                .unwrap_or_default(),
+        }
+    }
+
     /// Human-readable file size string.
     pub fn size_display(&self) -> String {
         if self.is_dir {

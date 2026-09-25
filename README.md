@@ -34,6 +34,11 @@ scale = 1.1
 For anything tokens don't cover, write plain GTK CSS in `~/.config/diptych/user.css`
 (also hot-reloaded). See [docs/theming.md](docs/theming.md) for every token and CSS class.
 
+The window itself is configured in `~/.config/diptych/layout.toml`: which panes are shown and where,
+their widths, header bar items and their order, inspector fields, and window decorations
+([docs/layout.md](docs/layout.md)). Diptych adapts to GNOME, KDE Plasma and tiling compositors like
+Hyprland ([docs/desktops.md](docs/desktops.md)).
+
 ## 🛠️ Development Setup
 
 You can develop Diptych on **any operating system**.

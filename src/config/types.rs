@@ -54,6 +54,15 @@ pub enum ViewMode {
     Tree,
 }
 
+// ─── Click Behavior ───
+
+/// Whether a single click opens items, or selects them (double click opens).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub enum OpenWith {
+    SingleClick,
+    DoubleClick,
+}
+
 // ─── Application Config ───
 
 /// All user-configurable settings, persisted to disk as TOML.
@@ -76,6 +85,9 @@ pub struct AppConfig {
     // Grouping
     pub grouping: GroupBy,
 
+    // Behavior
+    pub open_with: OpenWith,
+
     // Window state
     pub window_width: i32,
     pub window_height: i32,
@@ -92,6 +104,7 @@ impl Default for AppConfig {
             show_file_size: true,
             show_modified_date: true,
             grouping: GroupBy::None,
+            open_with: OpenWith::DoubleClick,
             window_width: 1100,
             window_height: 700,
         }

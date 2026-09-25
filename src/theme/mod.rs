@@ -6,15 +6,13 @@ mod color;
 mod css;
 mod model;
 
-pub use model::{Theme, ThemeFile};
+pub use model::{Mode, Theme, ThemeFile};
 
-use gtk4::prelude::*;
 use gtk4::CssProvider;
 use model::{Presets, BUILTIN_PRESETS, DEFAULT_PRESET};
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::time::Duration;
 
 const THEME_FILE: &str = "theme.toml";
 const USER_CSS: &str = "user.css";
@@ -27,8 +25,7 @@ pub struct ThemeManager {
     user_provider: CssProvider,
     last_error: RefCell<Option<String>>,
     /// Kept alive so file events keep arriving.
-    monitors: RefCell<Vec<gio::FileMonitor>>,
-    pending_reload: RefCell<Option<glib::SourceId>>,
+    watches: RefCell<Vec<crate::config::watch::Watch>>,
 }
 
 impl ThemeManager {
@@ -41,8 +38,7 @@ impl ThemeManager {
             theme_provider: CssProvider::new(),
             user_provider: CssProvider::new(),
             last_error: RefCell::new(None),
-            monitors: RefCell::new(vec![]),
-            pending_reload: RefCell::new(None),
+            watches: RefCell::new(vec![]),
         });
 
         if let Some(display) = gtk4::gdk::Display::default() {
@@ -79,6 +75,15 @@ impl ThemeManager {
         }
         manager.reload();
         manager.watch();
+
+        // `mode = "system"`: re-pick the preset when the desktop flips
+        // between light and dark.
+        let weak = Rc::downgrade(&manager);
+        adw::StyleManager::default().connect_dark_notify(move |_| {
+            if let Some(m) = weak.upgrade() {
+                m.reload();
+            }
+        });
         manager
     }
 
@@ -94,15 +99,21 @@ impl ThemeManager {
     /// Re-reads `theme.toml` and `user.css`. On a theme error the previous
     /// theme stays active, so a half-typed edit never breaks the UI.
     pub fn reload(&self) {
-        match self.load_theme() {
-            Ok(theme) => match css::generate(&theme) {
+        let style = adw::StyleManager::default();
+        match self.load_theme(style.is_dark()) {
+            Ok((theme, mode)) => match css::generate(&theme) {
                 Ok(css) => {
                     self.theme_provider.load_from_data(&css);
-                    adw::StyleManager::default().set_color_scheme(if theme.dark {
-                        adw::ColorScheme::ForceDark
-                    } else {
-                        adw::ColorScheme::ForceLight
-                    });
+                    let scheme = match mode {
+                        Some(Mode::System) => adw::ColorScheme::Default,
+                        _ if theme.dark => adw::ColorScheme::ForceDark,
+                        _ => adw::ColorScheme::ForceLight,
+                    };
+                    // Setting the same scheme again is a no-op, so this
+                    // can't loop through `connect_dark_notify`.
+                    if style.color_scheme() != scheme {
+                        style.set_color_scheme(scheme);
+                    }
                     println!("[theme] Applied “{}”", theme.name);
                     *self.last_error.borrow_mut() = None;
                 }
@@ -124,16 +135,19 @@ impl ThemeManager {
         *self.last_error.borrow_mut() = Some(error);
     }
 
-    fn load_theme(&self) -> Result<Theme, String> {
+    fn load_theme(&self, system_dark: bool) -> Result<(Theme, Option<Mode>), String> {
         let src = std::fs::read_to_string(self.theme_path()).unwrap_or_default();
-        let file = ThemeFile::parse(&src)?;
+        let mut file = ThemeFile::parse(&src)?;
+        let mode = file.mode();
+        file.base = file.base_for(system_dark);
         let user_dir = self.dir.join(THEMES_DIR);
-        Theme::resolve(
+        let theme = Theme::resolve(
             &file,
             &Presets {
                 user_dir: Some(&user_dir),
             },
-        )
+        )?;
+        Ok((theme, mode))
     }
 
     /// `(id, display name)` of every selectable preset: built-ins, then
@@ -186,43 +200,24 @@ impl ThemeManager {
     // ─── Hot reload ───
 
     fn watch(self: &Rc<Self>) {
-        let _ = std::fs::create_dir_all(self.dir.join(THEMES_DIR));
-        for dir in [self.dir.clone(), self.dir.join(THEMES_DIR)] {
-            let file = gio::File::for_path(&dir);
-            match file.monitor_directory(gio::FileMonitorFlags::WATCH_MOVES, gio::Cancellable::NONE)
-            {
-                Ok(monitor) => {
-                    let weak = Rc::downgrade(self);
-                    monitor.connect_changed(move |_, file, _, _| {
-                        let relevant = file.basename().is_some_and(|name| {
-                            name == Path::new(THEME_FILE)
-                                || name == Path::new(USER_CSS)
-                                || name.extension().is_some_and(|e| e == "toml")
-                        });
-                        if let (true, Some(manager)) = (relevant, weak.upgrade()) {
-                            manager.schedule_reload();
-                        }
-                    });
-                    self.monitors.borrow_mut().push(monitor);
+        let reload = |weak: std::rc::Weak<Self>| {
+            move || {
+                if let Some(manager) = weak.upgrade() {
+                    manager.reload();
                 }
-                Err(e) => eprintln!("[theme] Cannot watch {}: {}", dir.display(), e),
             }
-        }
-    }
-
-    /// Editors often write a file in several steps; coalesce into one reload.
-    fn schedule_reload(self: &Rc<Self>) {
-        if let Some(id) = self.pending_reload.borrow_mut().take() {
-            id.remove();
-        }
-        let weak = Rc::downgrade(self);
-        let id = glib::timeout_add_local_once(Duration::from_millis(120), move || {
-            if let Some(manager) = weak.upgrade() {
-                manager.pending_reload.borrow_mut().take();
-                manager.reload();
-            }
-        });
-        *self.pending_reload.borrow_mut() = Some(id);
+        };
+        let own_files = crate::config::watch::watch(
+            std::slice::from_ref(&self.dir),
+            |name| name == Path::new(THEME_FILE) || name == Path::new(USER_CSS),
+            reload(Rc::downgrade(self)),
+        );
+        let presets = crate::config::watch::watch(
+            &[self.dir.join(THEMES_DIR)],
+            |name| name.extension().is_some_and(|e| e == "toml"),
+            reload(Rc::downgrade(self)),
+        );
+        self.watches.borrow_mut().extend([own_files, presets]);
     }
 }
 
@@ -270,6 +265,11 @@ fn starter_theme(base: &str) -> String {
 # or any file in ~/.config/diptych/themes/<id>.toml.
 base = "{base}"
 
+# Follow the desktop's light/dark preference (GNOME, KDE, Hyprland via
+# the settings portal): uncomment to use a light preset in light mode.
+# base-light = "cozy-latte"
+# mode = "system"          # system | dark | light
+
 # Override any token of the base theme below. Colors accept #rrggbb,
 # #rrggbbaa, rgb(), rgba() or a reference such as "@accent".
 # For anything else, write plain GTK CSS in ~/.config/diptych/user.css.
@@ -293,7 +293,7 @@ base = "{base}"
 # density = "comfortable"    # compact | comfortable | spacious
 
 # [fonts]
-# ui = "Inter, Cantarell, sans-serif"
+# ui = "system"             # desktop font, or e.g. "Inter, sans-serif"
 # mono = "JetBrains Mono, monospace"
 # scale = 1.0
 "##,

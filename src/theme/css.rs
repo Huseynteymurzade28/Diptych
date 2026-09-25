@@ -102,7 +102,13 @@ fn expand(placeholder: &str, theme: &Theme) -> Result<String, String> {
         };
     }
     match placeholder {
-        "font-ui" => return Ok(theme.font_ui.clone()),
+        // No rule at all for "system", so GTK keeps the desktop's font.
+        "font-ui-rule" => {
+            return Ok(match &theme.font_ui {
+                Some(family) => format!("font-family: {};", family),
+                None => String::new(),
+            })
+        }
         "font-mono" => return Ok(theme.font_mono.clone()),
         _ => {}
     }
@@ -162,6 +168,8 @@ mod tests {
             "derived selection color"
         );
         assert!(css.contains("font-family: Figtree;"));
+        // Presets default to the desktop font: no font-family rule.
+        assert!(!generate(&theme("")).unwrap().contains("font-family"));
         // .file-card: radius 1.0 × 20, padding 14 × 1.25, name 12 × 1.5
         assert!(css.contains("border-radius: 20px;"));
         assert!(css.contains("padding: 18px"));
