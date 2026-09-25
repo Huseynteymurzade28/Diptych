@@ -1,19 +1,14 @@
-use crate::config::{AppConfig, GroupBy, IconTheme, ViewMode};
+use crate::config::{GroupBy, IconTheme, ViewMode};
 use crate::core::Theme;
+use crate::ui::state::AppState;
 use gtk4::prelude::*;
-use gtk4::{
-    Align, Box, CssProvider, DropDown, Label, Orientation, Scale, Separator, StringList, Switch,
-};
-use std::cell::RefCell;
+use gtk4::{Align, Box, DropDown, Label, Orientation, Scale, Separator, StringList, Switch};
 use std::rc::Rc;
 
 /// Builds the full settings panel as a Box widget.
-/// Takes shared config + a "refresh" callback to apply changes live.
-pub fn build_settings_panel(
-    config: Rc<RefCell<AppConfig>>,
-    css_provider: CssProvider,
-    on_change: Rc<dyn Fn()>,
-) -> Box {
+/// Every change goes through `AppState::update_config`, which saves and refreshes.
+pub fn build_settings_panel(state: &Rc<AppState>) -> Box {
+    let config = &state.config;
     let panel = Box::builder()
         .orientation(Orientation::Vertical)
         .spacing(16)
@@ -60,18 +55,11 @@ pub fn build_settings_panel(
             }
         }
 
-        let config_c = config.clone();
-        let css_c = css_provider.clone();
-        let on_change_c = on_change.clone();
+        let state_c = state.clone();
         dropdown.connect_selected_notify(move |dd| {
-            let idx = dd.selected() as usize;
-            let names = Theme::all_names();
-            if let Some(name) = names.get(idx) {
-                let theme = Theme::from_name(name);
-                css_c.load_from_data(&theme.to_css());
-                config_c.borrow_mut().theme = name.to_string();
-                config_c.borrow().save();
-                on_change_c();
+            if let Some(name) = Theme::all_names().get(dd.selected() as usize) {
+                state_c.apply_theme(name);
+                state_c.update_config(|cfg| cfg.theme = name.to_string());
             }
         });
         row.append(&dropdown);
@@ -95,16 +83,15 @@ pub fn build_settings_panel(
             .width_chars(5)
             .build();
 
-        // Update label and apply live, but DON'T save to disk on every tick.
-        // Config is persisted on window close or when another setting changes.
-        let config_c = config.clone();
-        let on_change_c = on_change.clone();
+        // Only update in memory on every tick; the content view re-renders
+        // when settings close, and config is saved on window close or when
+        // another setting changes.
+        let state_c = state.clone();
         let size_label_c = size_label.clone();
         scale.connect_value_changed(move |s| {
             let val = s.value() as i32;
-            config_c.borrow_mut().icon_size = val;
+            state_c.config.borrow_mut().icon_size = val;
             size_label_c.set_label(&format!("{}px", val));
-            on_change_c();
         });
 
         row.append(&scale);
@@ -124,17 +111,15 @@ pub fn build_settings_panel(
             ViewMode::Tree => 3,
         });
 
-        let config_c = config.clone();
-        let on_change_c = on_change.clone();
+        let state_c = state.clone();
         dropdown.connect_selected_notify(move |dd| {
-            config_c.borrow_mut().view_mode = match dd.selected() {
+            let value = match dd.selected() {
                 0 => ViewMode::Grid,
                 1 => ViewMode::List,
                 2 => ViewMode::Graph,
                 _ => ViewMode::Tree,
             };
-            config_c.borrow().save();
-            on_change_c();
+            state_c.update_config(|cfg| cfg.view_mode = value);
         });
         row.append(&dropdown);
         panel.append(&row);
@@ -155,15 +140,10 @@ pub fn build_settings_panel(
             }
         }
 
-        let config_c = config.clone();
-        let on_change_c = on_change.clone();
+        let state_c = state.clone();
         dropdown.connect_selected_notify(move |dd| {
-            let idx = dd.selected() as usize;
-            let names = IconTheme::all_names();
-            if let Some(name) = names.get(idx) {
-                config_c.borrow_mut().icon_theme = IconTheme::from_name(name);
-                config_c.borrow().save();
-                on_change_c();
+            if let Some(name) = IconTheme::all_names().get(dd.selected() as usize) {
+                state_c.update_config(|cfg| cfg.icon_theme = IconTheme::from_name(name));
             }
         });
         row.append(&dropdown);
@@ -193,17 +173,15 @@ pub fn build_settings_panel(
             GroupBy::Name => 3,
         });
 
-        let config_c = config.clone();
-        let on_change_c = on_change.clone();
+        let state_c = state.clone();
         dropdown.connect_selected_notify(move |dd| {
-            config_c.borrow_mut().grouping = match dd.selected() {
+            let value = match dd.selected() {
                 1 => GroupBy::Type,
                 2 => GroupBy::Date,
                 3 => GroupBy::Name,
                 _ => GroupBy::None,
             };
-            config_c.borrow().save();
-            on_change_c();
+            state_c.update_config(|cfg| cfg.grouping = value);
         });
         row.append(&dropdown);
         panel.append(&row);
@@ -229,12 +207,10 @@ pub fn build_settings_panel(
             .active(config.borrow().show_file_size)
             .valign(Align::Center)
             .build();
-        let config_c = config.clone();
-        let on_change_c = on_change.clone();
+        let state_c = state.clone();
         switch.connect_active_notify(move |s| {
-            config_c.borrow_mut().show_file_size = s.is_active();
-            config_c.borrow().save();
-            on_change_c();
+            let value = s.is_active();
+            state_c.update_config(|cfg| cfg.show_file_size = value);
         });
         row.append(&switch);
         panel.append(&row);
@@ -247,12 +223,10 @@ pub fn build_settings_panel(
             .active(config.borrow().show_modified_date)
             .valign(Align::Center)
             .build();
-        let config_c = config.clone();
-        let on_change_c = on_change.clone();
+        let state_c = state.clone();
         switch.connect_active_notify(move |s| {
-            config_c.borrow_mut().show_modified_date = s.is_active();
-            config_c.borrow().save();
-            on_change_c();
+            let value = s.is_active();
+            state_c.update_config(|cfg| cfg.show_modified_date = value);
         });
         row.append(&switch);
         panel.append(&row);
@@ -265,12 +239,10 @@ pub fn build_settings_panel(
             .active(config.borrow().show_hidden)
             .valign(Align::Center)
             .build();
-        let config_c = config.clone();
-        let on_change_c = on_change.clone();
+        let state_c = state.clone();
         switch.connect_active_notify(move |s| {
-            config_c.borrow_mut().show_hidden = s.is_active();
-            config_c.borrow().save();
-            on_change_c();
+            let value = s.is_active();
+            state_c.update_config(|cfg| cfg.show_hidden = value);
         });
         row.append(&switch);
         panel.append(&row);
