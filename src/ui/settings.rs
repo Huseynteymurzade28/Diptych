@@ -1,5 +1,4 @@
 use crate::config::{GroupBy, IconTheme, ViewMode};
-use crate::core::Theme;
 use crate::ui::state::AppState;
 use gtk4::prelude::*;
 use gtk4::{Align, Box, DropDown, Label, Orientation, Scale, Separator, StringList, Switch};
@@ -42,28 +41,26 @@ pub fn build_settings_panel(state: &Rc<AppState>) -> Box {
     // Theme selector
     {
         let row = setting_row("Theme");
-        let theme_names = Theme::all_names();
-        let string_list = StringList::new(&theme_names);
-        let dropdown = DropDown::builder().model(&string_list).build();
+        let presets = state.theme.available();
+        let names: Vec<&str> = presets.iter().map(|(_, name)| name.as_str()).collect();
+        let dropdown = DropDown::builder().model(&StringList::new(&names)).build();
 
-        // Set current selection
-        let current_theme = config.borrow().theme.clone();
-        for (i, name) in theme_names.iter().enumerate() {
-            if *name == current_theme {
-                dropdown.set_selected(i as u32);
-                break;
-            }
+        let current = state.theme.base();
+        if let Some(i) = presets.iter().position(|(id, _)| *id == current) {
+            dropdown.set_selected(i as u32);
         }
 
         let state_c = state.clone();
         dropdown.connect_selected_notify(move |dd| {
-            if let Some(name) = Theme::all_names().get(dd.selected() as usize) {
-                state_c.apply_theme(name);
-                state_c.update_config(|cfg| cfg.theme = name.to_string());
+            if let Some((id, _)) = presets.get(dd.selected() as usize) {
+                if let Err(e) = state_c.theme.set_base(id) {
+                    eprintln!("[theme] Could not switch theme: {}", e);
+                }
             }
         });
         row.append(&dropdown);
         panel.append(&row);
+        panel.append(&theme_file_hint(state));
     }
 
     // Icon size slider
@@ -249,6 +246,25 @@ pub fn build_settings_panel(state: &Rc<AppState>) -> Box {
     }
 
     panel
+}
+
+/// Points power users at the files behind the Theme dropdown.
+fn theme_file_hint(state: &Rc<AppState>) -> Label {
+    let dir = state.theme.theme_path();
+    let dir = dir.parent().unwrap_or(&dir);
+    let text = match state.theme.last_error() {
+        Some(err) => format!("⚠ theme.toml: {}", err),
+        None => format!(
+            "Fine-tune colors, corners, density and fonts in {}/theme.toml, or add user.css. Changes apply on save.",
+            dir.display()
+        ),
+    };
+    Label::builder()
+        .label(&text)
+        .css_classes(vec!["inspector-subtitle".to_string()])
+        .wrap(true)
+        .xalign(0.0)
+        .build()
 }
 
 fn section_title(text: &str) -> Label {

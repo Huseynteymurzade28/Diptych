@@ -29,6 +29,7 @@
           buildInputs = with pkgs; [
             rustToolchain
             gtk4
+            libadwaita
             glib
             cairo
             pango

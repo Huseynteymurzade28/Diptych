@@ -1,0 +1,49 @@
+# Built-in Diptych theme. Copy to ~/.config/diptych/themes/<name>.toml to make your own.
+name = "High Contrast"
+dark = true
+
+[colors]
+window = "#000000"
+sidebar = "#0a0a0a"
+surface = "#1a1a1a"
+hover = "#2a2a2a"
+text = "#ffffff"
+text-secondary = "#cccccc"
+text-muted = "#999999"
+text-subtle = "#dddddd"
+accent = "#ffdd00"
+accent-hover = "#ffee55"
+accent-text = "@window"
+border = "rgba(255, 255, 255, 0.20)"
+border-hover = "rgba(255, 221, 0, 0.50)"
+shadow = "rgba(0, 0, 0, 0.50)"
+shadow-hover = "rgba(0, 0, 0, 0.65)"
+danger = "#ff5555"
+
+[files]
+folder = "@accent"
+rust = "#ffaa00"
+python = "#55ddff"
+js = "#ffdd00"
+c = "#55ddff"
+java = "#ff5555"
+go = "#55ff55"
+script = "#ff77ff"
+image = "#55ff55"
+audio = "#ff77ff"
+video = "#ff5555"
+archive = "#ffdd00"
+pdf = "#ff5555"
+web = "#00ffff"
+text = "@text-muted"
+config = "#00ffff"
+default = "@text-secondary"
+
+[shape]
+radius = 14
+density = "comfortable"
+
+[fonts]
+ui = "Inter, Cantarell, sans-serif"
+mono = "JetBrains Mono, monospace"
+scale = 1.0

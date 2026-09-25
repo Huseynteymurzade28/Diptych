@@ -1,8 +1,6 @@
 // ─── Core Module ───
-// Framework-agnostic domain logic: theme definitions, color palettes.
+// Framework-agnostic helpers.
 
 pub mod text;
-pub mod theme;
 
 pub use text::truncate_chars;
-pub use theme::Theme;

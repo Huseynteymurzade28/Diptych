@@ -1,9 +1,9 @@
 use crate::config::{AppConfig, ViewMode};
-use crate::core::Theme;
 use crate::filesystem::{self, Entry};
+use crate::theme::ThemeManager;
 use crate::ui::{content, settings, sidebar};
 use gtk4::prelude::*;
-use gtk4::{ApplicationWindow, Box, Button, CssProvider, Label, ScrolledWindow};
+use gtk4::{ApplicationWindow, Box, Button, Label, ScrolledWindow};
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -28,7 +28,7 @@ pub struct AppState {
     settings_visible: Cell<bool>,
 
     pub window: ApplicationWindow,
-    pub css_provider: CssProvider,
+    pub theme: Rc<ThemeManager>,
     pub content_scroll: ScrolledWindow,
     pub content_box: Box,
     pub nav_box: Box,
@@ -40,7 +40,7 @@ pub struct AppState {
 /// Widgets the state needs to drive; built by `window::build`.
 pub struct StateWidgets {
     pub window: ApplicationWindow,
-    pub css_provider: CssProvider,
+    pub theme: Rc<ThemeManager>,
     pub content_scroll: ScrolledWindow,
     pub content_box: Box,
     pub nav_box: Box,
@@ -57,7 +57,7 @@ impl AppState {
             selected: RefCell::new(None),
             settings_visible: Cell::new(false),
             window: w.window,
-            css_provider: w.css_provider,
+            theme: w.theme,
             content_scroll: w.content_scroll,
             content_box: w.content_box,
             nav_box: w.nav_box,
@@ -165,11 +165,6 @@ impl AppState {
             cfg.save();
         }
         self.refresh();
-    }
-
-    pub fn apply_theme(&self, name: &str) {
-        self.css_provider
-            .load_from_data(&Theme::from_name(name).to_css());
     }
 
     pub fn cycle_view_mode(self: &Rc<Self>) {

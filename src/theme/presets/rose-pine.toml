@@ -1,0 +1,49 @@
+# Built-in Diptych theme. Copy to ~/.config/diptych/themes/<name>.toml to make your own.
+name = "Rosé Pine"
+dark = true
+
+[colors]
+window = "#191724"
+sidebar = "#1f1d2e"
+surface = "#26233a"
+hover = "#2a283e"
+text = "#e0def4"
+text-secondary = "#908caa"
+text-muted = "#6e6a86"
+text-subtle = "#e0def4"
+accent = "#c4a7e7"
+accent-hover = "#d4bff0"
+accent-text = "@window"
+border = "rgba(224, 222, 244, 0.06)"
+border-hover = "rgba(196, 167, 231, 0.25)"
+shadow = "rgba(0, 0, 0, 0.18)"
+shadow-hover = "rgba(0, 0, 0, 0.28)"
+danger = "#eb6f92"
+
+[files]
+folder = "@accent"
+rust = "#ebbcba"
+python = "#9ccfd8"
+js = "#f6c177"
+c = "#9ccfd8"
+java = "#eb6f92"
+go = "#9ccfd8"
+script = "#c4a7e7"
+image = "#9ccfd8"
+audio = "#c4a7e7"
+video = "#eb6f92"
+archive = "#f6c177"
+pdf = "#eb6f92"
+web = "#9ccfd8"
+text = "@text-muted"
+config = "#ebbcba"
+default = "@text-secondary"
+
+[shape]
+radius = 14
+density = "comfortable"
+
+[fonts]
+ui = "Inter, Cantarell, sans-serif"
+mono = "JetBrains Mono, monospace"
+scale = 1.0

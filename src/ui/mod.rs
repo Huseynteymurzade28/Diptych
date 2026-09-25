@@ -10,6 +10,7 @@ pub mod inspector;
 pub mod preview;
 pub mod settings;
 pub mod sidebar;
+pub mod snapshot;
 pub mod state;
 pub mod tree_view;
 pub mod widgets;

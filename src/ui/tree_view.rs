@@ -219,13 +219,10 @@ fn render_tree(
             vec![
                 "tree-name".to_string(),
                 "tree-name-file".to_string(),
+                // Colored by file kind; see `.tree-kind-*` in theme/css.rs
                 format!(
-                    "tree-ext-{}",
-                    if entry.extension.is_empty() {
-                        "none"
-                    } else {
-                        &entry.extension
-                    }
+                    "tree-kind-{}",
+                    icon_css_class(entry).trim_start_matches("icon-")
                 ),
             ]
         };
