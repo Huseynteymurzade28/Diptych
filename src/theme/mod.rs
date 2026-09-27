@@ -103,7 +103,7 @@ impl ThemeManager {
         match self.load_theme(style.is_dark()) {
             Ok((theme, mode)) => match css::generate(&theme) {
                 Ok(css) => {
-                    self.theme_provider.load_from_data(&css);
+                    self.theme_provider.load_from_string(&css);
                     let scheme = match mode {
                         Some(Mode::System) => adw::ColorScheme::Default,
                         _ if theme.dark => adw::ColorScheme::ForceDark,
@@ -123,7 +123,7 @@ impl ThemeManager {
         }
 
         let user_css = std::fs::read_to_string(self.dir.join(USER_CSS)).unwrap_or_default();
-        self.user_provider.load_from_data(&user_css);
+        self.user_provider.load_from_string(&user_css);
     }
 
     fn report(&self, error: String) {

@@ -3,18 +3,16 @@ use gtk4::prelude::*;
 use gtk4::{
     Align, Button, Entry as GtkEntry, GestureClick, Label, Orientation, Popover, Separator, Widget,
 };
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
 
 // ═══════════════════════════════════════════════
 //  Right-Click Context Menu System
 // ═══════════════════════════════════════════════
 //
-// Two context menus:
-//   1. Background context menu — right-click on empty space
-//      → "New Folder", "New File", "Refresh"
-//   2. File/item context menu  — right-click on a file entry
-//      → "Open", "Rename", "Move to Trash", "Delete Permanently…"
+// Background context menu — right-click on empty space
+//   → "New Folder", "New File", "Select All", "Refresh"
+// (The item menu is a shared `gio::Menu` in `file_view.rs`.)
 //
 // All actual work is delegated to `AppState`.
 
@@ -29,6 +27,8 @@ pub fn attach_background_context_menu(target: &impl IsA<Widget>, state: &Rc<AppS
 
     let new_folder_btn = context_menu_button("folder-new-symbolic", "New Folder");
     let new_file_btn = context_menu_button("document-new-symbolic", "New File");
+    let select_all_btn = context_menu_button("edit-select-all-symbolic", "Select All");
+    select_all_btn.set_action_name(Some("win.select-all"));
     let refresh_btn = context_menu_button("view-refresh-symbolic", "Refresh");
     refresh_btn.set_action_name(Some("win.refresh"));
 
@@ -36,6 +36,7 @@ pub fn attach_background_context_menu(target: &impl IsA<Widget>, state: &Rc<AppS
     menu_box.append(&new_folder_btn);
     menu_box.append(&new_file_btn);
     menu_box.append(&menu_separator());
+    menu_box.append(&select_all_btn);
     menu_box.append(&refresh_btn);
     popover.set_child(Some(&menu_box));
 
@@ -56,9 +57,9 @@ pub fn attach_background_context_menu(target: &impl IsA<Widget>, state: &Rc<AppS
             });
         });
     }
-    {
+    for btn in [&select_all_btn, &refresh_btn] {
         let popover_c = popover.clone();
-        refresh_btn.connect_clicked(move |_| popover_c.popdown());
+        btn.connect_clicked(move |_| popover_c.popdown());
     }
 
     let gesture = GestureClick::builder().button(3).build();
@@ -71,75 +72,21 @@ pub fn attach_background_context_menu(target: &impl IsA<Widget>, state: &Rc<AppS
 }
 
 // ═══════════════════════════════════════════════
-//  File Item Context Menu
-// ═══════════════════════════════════════════════
-
-type ItemAction = Box<dyn Fn(&Rc<AppState>, &Path, &Widget)>;
-
-/// Attaches a right-click context menu to a file/folder widget.
-pub fn attach_file_context_menu(
-    target: &impl IsA<Widget>,
-    file_path: PathBuf,
-    state: &Rc<AppState>,
-) {
-    let target = target.as_ref().clone();
-    let popover = new_menu_popover(&target);
-
-    let open_btn = context_menu_button("document-open-symbolic", "Open");
-    let rename_btn = context_menu_button("document-edit-symbolic", "Rename");
-    let trash_btn = context_menu_button("user-trash-symbolic", "Move to Trash");
-    let delete_btn = context_menu_button("edit-delete-symbolic", "Delete Permanently…");
-    delete_btn.add_css_class("context-menu-danger");
-
-    let menu_box = menu_box();
-    menu_box.append(&open_btn);
-    menu_box.append(&rename_btn);
-    menu_box.append(&menu_separator());
-    menu_box.append(&trash_btn);
-    menu_box.append(&delete_btn);
-    popover.set_child(Some(&menu_box));
-
-    // Each button closes the menu, then runs its action on the file.
-    let wire = |btn: &Button, f: ItemAction| {
-        let popover = popover.clone();
-        let state = state.clone();
-        let path = file_path.clone();
-        let target = target.clone();
-        btn.connect_clicked(move |_| {
-            popover.popdown();
-            f(&state, &path, &target);
-        });
-    };
-
-    wire(&open_btn, Box::new(|s, p, _| s.open(p)));
-    wire(&trash_btn, Box::new(|s, p, _| s.trash(p)));
-    wire(
-        &delete_btn,
-        Box::new(|s, p, _| s.confirm_delete_permanently(p)),
-    );
-    wire(
-        &rename_btn,
-        Box::new(|s, p, target| {
-            let old_name = p
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default();
-            let state = s.clone();
-            let path = p.to_path_buf();
-            show_name_dialog(target, "Rename", "Rename", &old_name, move |name| {
-                state.rename(&path, name)
-            });
-        }),
-    );
-
-    let gesture = GestureClick::builder().button(3).build();
-    gesture.connect_pressed(move |_gesture, _n, _x, _y| popover.popup());
-    target.add_controller(gesture);
-}
-
-// ═══════════════════════════════════════════════
 //  Name Dialog (create / rename)
 // ═══════════════════════════════════════════════
+
+/// Asks for a new name for `path`, anchored to `anchor`.
+pub fn show_rename_dialog(state: &Rc<AppState>, anchor: &Widget, path: &Path) {
+    let old_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let state = state.clone();
+    let path = path.to_path_buf();
+    show_name_dialog(anchor, "Rename", "Rename", &old_name, move |name| {
+        state.rename(&path, name)
+    });
+}
 
 /// Shows a small popover anchored to `anchor` asking for a name.
 /// `submit` performs the operation; its error is shown on the entry.

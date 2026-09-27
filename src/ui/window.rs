@@ -1,6 +1,7 @@
 use crate::config::{layout, persistence, AppConfig, LayoutConfig};
 use crate::theme::ThemeManager;
 use crate::ui::chrome::Chrome;
+use crate::ui::file_view::FileView;
 use crate::ui::state::{AppState, StateWidgets};
 use crate::ui::{context_menu, hamburger, inspector, sidebar};
 use gtk4::prelude::*;
@@ -63,8 +64,14 @@ pub fn build(app: &adw::Application) {
         .vexpand(true)
         .hexpand(true)
         .child(&content_box)
-        .css_classes(["content-view"])
         .build();
+
+    // Grid / list: the virtualized file view. Tree, graph and settings:
+    // `content_scroll`.
+    let file_view = FileView::new();
+    let content_stack = gtk4::Stack::builder().css_classes(["content-view"]).build();
+    content_stack.add_named(&file_view.root, Some("files"));
+    content_stack.add_named(&content_scroll, Some("other"));
 
     let inspector_pane = inspector::build_pane();
     let inspector_scroll = ScrolledWindow::builder()
@@ -76,7 +83,7 @@ pub fn build(app: &adw::Application) {
     let chrome = Chrome::new(
         &window,
         &sidebar_widget,
-        &content_scroll,
+        &content_stack,
         &inspector_scroll,
         &hamburger::build_hamburger_menu(),
     );
@@ -94,12 +101,15 @@ pub fn build(app: &adw::Application) {
             window: window.clone(),
             theme,
             chrome,
+            content_stack,
+            file_view: file_view.clone(),
             content_scroll,
             content_box: content_box.clone(),
             places,
             inspector: inspector_pane,
         },
     );
+    file_view.bind(&state);
     sidebar::bind_places(&state);
     sidebar::setup_creation_popover(&state);
 
@@ -118,8 +128,8 @@ pub fn build(app: &adw::Application) {
     // Right-click on empty content area
     context_menu::attach_background_context_menu(&content_box, &state);
 
-    // Left-click on empty space clears the selection. Item buttons claim
-    // their own clicks, so this only fires between/below items.
+    // Tree view: left-click on empty space clears the selection. Item
+    // buttons claim their own clicks, so this only fires between/below items.
     {
         let gesture = gtk4::GestureClick::builder().button(1).build();
         let state_c = state.clone();

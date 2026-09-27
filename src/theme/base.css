@@ -597,6 +597,36 @@ switch:checked {
     background-color: {{accent/0.14}};
     box-shadow: inset 3px 0 0 {{accent}};
 }
+/* GridView / ListView wrap each item in a child / row that carries the
+   selection state; the item widget inside draws it. */
+.file-grid, .file-list {
+    background: transparent;
+    padding: {{sp 8}} {{sp 12}};
+}
+.file-grid > child, .file-list > row {
+    background: none;
+    padding: 0;
+    border-radius: {{radius 1}};
+}
+.file-list > header {
+    background: none;
+    padding: 0;
+}
+.file-grid > child:selected > .file-card,
+.file-grid > child:selected > .file-card:hover {
+    background-color: {{accent/0.14}};
+    border-color: {{accent}};
+}
+.file-list > row:selected > .file-row,
+.file-list > row:selected > .file-row:hover {
+    background-color: {{accent/0.14}};
+    box-shadow: inset 3px 0 0 {{accent}};
+}
+.file-grid > rubberband, .file-list > rubberband {
+    background-color: {{accent/0.12}};
+    border: 1px solid {{accent/0.6}};
+    border-radius: {{radius 0.3}};
+}
 .place-btn.active {
     background-color: {{accent/0.14}};
     font-weight: 600;

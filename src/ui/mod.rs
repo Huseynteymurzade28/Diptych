@@ -5,6 +5,7 @@ pub mod chrome;
 pub mod content;
 pub mod context_menu;
 pub mod drag_source;
+pub mod file_view;
 pub mod graph_view;
 pub mod hamburger;
 pub mod inspector;

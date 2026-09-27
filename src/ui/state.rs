@@ -2,6 +2,7 @@ use crate::config::{AppConfig, LayoutConfig, OpenWith, ViewMode};
 use crate::filesystem::{self, Entry};
 use crate::theme::ThemeManager;
 use crate::ui::chrome::Chrome;
+use crate::ui::file_view::FileView;
 use crate::ui::{content, inspector, settings, sidebar};
 use adw::prelude::*;
 use gtk4::{Box, ScrolledWindow};
@@ -26,8 +27,9 @@ pub struct AppState {
     pub config: RefCell<AppConfig>,
     pub layout: RefCell<LayoutConfig>,
     current_path: RefCell<PathBuf>,
-    selected: RefCell<Option<PathBuf>>,
-    /// The highlighted item widget, to un-highlight it on the next select.
+    /// Selected items, mirrored from the file view (or set by the tree view).
+    selected: RefCell<Vec<PathBuf>>,
+    /// The highlighted tree-view row, to un-highlight it on the next select.
     selected_widget: RefCell<glib::WeakRef<gtk4::Widget>>,
     back: RefCell<Vec<PathBuf>>,
     forward: RefCell<Vec<PathBuf>>,
@@ -36,6 +38,9 @@ pub struct AppState {
     pub window: adw::ApplicationWindow,
     pub theme: Rc<ThemeManager>,
     pub chrome: Chrome,
+    /// "files" → `file_view`; "other" → `content_scroll` (tree, graph, settings).
+    pub content_stack: gtk4::Stack,
+    pub file_view: Rc<FileView>,
     pub content_scroll: ScrolledWindow,
     pub content_box: Box,
     /// Place rows in the sidebar (highlighted when current).
@@ -48,6 +53,8 @@ pub struct StateWidgets {
     pub window: adw::ApplicationWindow,
     pub theme: Rc<ThemeManager>,
     pub chrome: Chrome,
+    pub content_stack: gtk4::Stack,
+    pub file_view: Rc<FileView>,
     pub content_scroll: ScrolledWindow,
     pub content_box: Box,
     pub places: Box,
@@ -65,7 +72,7 @@ impl AppState {
             config: RefCell::new(config),
             layout: RefCell::new(layout),
             current_path: RefCell::new(start_path),
-            selected: RefCell::new(None),
+            selected: RefCell::new(vec![]),
             selected_widget: RefCell::new(glib::WeakRef::new()),
             back: RefCell::new(vec![]),
             forward: RefCell::new(vec![]),
@@ -73,6 +80,8 @@ impl AppState {
             window: w.window,
             theme: w.theme,
             chrome: w.chrome,
+            content_stack: w.content_stack,
+            file_view: w.file_view,
             content_scroll: w.content_scroll,
             content_box: w.content_box,
             places: w.places,
@@ -88,7 +97,16 @@ impl AppState {
         self.current_path.borrow().clone()
     }
 
+    /// The selected item, if exactly one is selected.
     pub fn selected(&self) -> Option<PathBuf> {
+        match self.selected.borrow().as_slice() {
+            [one] => Some(one.clone()),
+            _ => None,
+        }
+    }
+
+    /// Every selected item.
+    pub fn selection(&self) -> Vec<PathBuf> {
         self.selected.borrow().clone()
     }
 
@@ -130,16 +148,25 @@ impl AppState {
         }
     }
 
+    /// Goes to the parent folder, with the folder we came from selected.
     pub fn go_up(self: &Rc<Self>) {
-        let parent = self.current_path.borrow().parent().map(Path::to_path_buf);
-        if let Some(parent) = parent {
-            self.navigate_to(parent);
+        let child = self.current_path();
+        let Some(parent) = child.parent().map(Path::to_path_buf) else {
+            return;
+        };
+        if !parent.is_dir() {
+            return;
         }
+        self.back.borrow_mut().push(child.clone());
+        self.forward.borrow_mut().clear();
+        *self.current_path.borrow_mut() = parent;
+        *self.selected.borrow_mut() = vec![child];
+        self.refresh();
     }
 
     fn set_path(self: &Rc<Self>, path: PathBuf) {
         *self.current_path.borrow_mut() = path;
-        *self.selected.borrow_mut() = None;
+        self.selected.borrow_mut().clear();
         self.refresh();
     }
 
@@ -154,11 +181,8 @@ impl AppState {
 
     /// Re-reads the current folder and redraws every view.
     pub fn refresh(self: &Rc<Self>) {
-        // Drop the selection if the file vanished (deleted / renamed).
-        let gone = self.selected.borrow().as_ref().is_some_and(|p| !p.exists());
-        if gone {
-            *self.selected.borrow_mut() = None;
-        }
+        // Drop selected files that vanished (deleted / renamed).
+        self.selected.borrow_mut().retain(|p| p.exists());
 
         self.refresh_header();
         sidebar::refresh_places(self);
@@ -187,11 +211,32 @@ impl AppState {
         set_action_enabled(&self.window, "back", !self.back.borrow().is_empty());
         set_action_enabled(&self.window, "forward", !self.forward.borrow().is_empty());
         set_action_enabled(&self.window, "go-up", path.parent().is_some());
+        self.update_selection_actions();
+    }
+
+    /// Refreshes after a file operation. The file view follows the disk by
+    /// itself (FileMonitor); other views are rebuilt.
+    fn after_file_op(self: &Rc<Self>) {
+        if self.file_view_active() && self.file_view.is_live() {
+            self.selected.borrow_mut().retain(|p| p.exists());
+            inspector::refresh(self);
+        } else {
+            self.refresh();
+        }
+    }
+
+    /// Whether the grid / list file view is on screen.
+    pub fn file_view_active(&self) -> bool {
+        !self.settings_visible.get()
+            && matches!(
+                self.config.borrow().view_mode,
+                ViewMode::Grid | ViewMode::List
+            )
     }
 
     // ─── Selection ───
 
-    /// Selects `entry`; `widget` (if any) gets the `.selected` highlight.
+    /// Selects `entry` (tree view); `widget` (if any) gets the `.selected` highlight.
     pub fn select(self: &Rc<Self>, entry: &Entry, widget: Option<&gtk4::Widget>) {
         if let Some(old) = self.selected_widget.borrow().upgrade() {
             old.remove_css_class("selected");
@@ -200,19 +245,62 @@ impl AppState {
             w.add_css_class("selected");
         }
         self.selected_widget.borrow().set(widget);
-        *self.selected.borrow_mut() = Some(entry.path.clone());
+        self.set_selection(vec![entry.path.clone()]);
+    }
+
+    /// Replaces the selection; called by the views when theirs changes.
+    pub fn set_selection(self: &Rc<Self>, paths: Vec<PathBuf>) {
+        if *self.selected.borrow() == paths {
+            return;
+        }
+        *self.selected.borrow_mut() = paths;
+        self.update_selection_actions();
         inspector::refresh(self);
     }
 
     pub fn clear_selection(self: &Rc<Self>) {
-        if self.selected.borrow().is_none() {
-            return;
-        }
         if let Some(old) = self.selected_widget.borrow().upgrade() {
             old.remove_css_class("selected");
         }
-        *self.selected.borrow_mut() = None;
-        inspector::refresh(self);
+        self.file_view.unselect_all();
+        self.set_selection(vec![]);
+    }
+
+    fn update_selection_actions(&self) {
+        let n = self.selected.borrow().len();
+        for name in ["open-selection", "trash-selection", "delete-selection"] {
+            set_action_enabled(&self.window, name, n > 0);
+        }
+        set_action_enabled(&self.window, "rename-selection", n == 1);
+    }
+
+    // ─── Selection actions (menus, shortcuts, inspector) ───
+
+    /// Opens the selection: a single folder is entered, files open in
+    /// their default apps.
+    pub fn open_selection(self: &Rc<Self>) {
+        let paths = self.selection();
+        if let [only] = paths.as_slice() {
+            self.activate(&Entry::from_path(only));
+            return;
+        }
+        for path in paths.iter().filter(|p| !p.is_dir()) {
+            self.open(path);
+        }
+    }
+
+    pub fn rename_selection(self: &Rc<Self>) {
+        let Some(path) = self.selected() else { return };
+        let anchor = if self.file_view_active() {
+            self.file_view.anchor()
+        } else {
+            self.content_scroll.clone().upcast()
+        };
+        crate::ui::context_menu::show_rename_dialog(self, &anchor, &path);
+    }
+
+    pub fn trash_selection(self: &Rc<Self>) {
+        self.trash_all(&self.selection());
     }
 
     /// What a click on an item does, per the "open with" preference.
@@ -286,6 +374,8 @@ impl AppState {
                 .child(&panel)
                 .build();
             self.content_scroll.set_child(Some(&scroll));
+            self.file_view.stop();
+            self.content_stack.set_visible_child_name("other");
         } else {
             self.content_scroll.set_child(Some(&self.content_box));
             content::refresh_content(self);
@@ -310,8 +400,10 @@ impl AppState {
         } else {
             filesystem::create_file(&parent, name)
         };
-        result.map_err(|e| e.to_string())?;
-        self.refresh();
+        let created = result.map_err(|e| e.to_string())?;
+        // Select the new item once it shows up.
+        *self.selected.borrow_mut() = vec![created];
+        self.after_file_op();
         Ok(())
     }
 
@@ -327,45 +419,69 @@ impl AppState {
             return Err(format!("“{}” already exists", new_name));
         }
         std::fs::rename(path, &new_path).map_err(|e| e.to_string())?;
-        if self.selected.borrow().as_deref() == Some(path) {
-            *self.selected.borrow_mut() = Some(new_path);
+        for selected in self.selected.borrow_mut().iter_mut() {
+            if selected == path {
+                *selected = new_path.clone();
+            }
         }
-        self.refresh();
+        self.after_file_op();
         Ok(())
     }
 
     pub fn trash(self: &Rc<Self>, path: &Path) {
-        match filesystem::move_to_trash(path) {
-            Ok(_) => self.refresh(),
-            Err(e) => eprintln!("Failed to move to trash: {}", e),
-        }
+        self.trash_all(&[path.to_path_buf()]);
     }
 
-    /// Asks for confirmation, then deletes `path` permanently.
-    pub fn confirm_delete_permanently(self: &Rc<Self>, path: &Path) {
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
+    fn trash_all(self: &Rc<Self>, paths: &[PathBuf]) {
+        if paths.is_empty() {
+            return;
+        }
+        for path in paths {
+            if let Err(e) = filesystem::move_to_trash(path) {
+                eprintln!("Failed to move {} to trash: {}", path.display(), e);
+            }
+        }
+        self.after_file_op();
+    }
+
+    /// Asks for confirmation, then deletes `paths` permanently.
+    pub fn confirm_delete_all(self: &Rc<Self>, paths: Vec<PathBuf>) {
+        let (message, detail) = match paths.as_slice() {
+            [] => return,
+            [one] => (
+                format!(
+                    "Permanently delete “{}”?",
+                    one.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_default()
+                ),
+                "This item will be deleted immediately. You can’t undo this action.",
+            ),
+            many => (
+                format!("Permanently delete {} items?", many.len()),
+                "These items will be deleted immediately. You can’t undo this action.",
+            ),
+        };
         let dialog = gtk4::AlertDialog::builder()
             .modal(true)
-            .message(format!("Permanently delete “{}”?", name))
-            .detail("This item will be deleted immediately. You can’t undo this action.")
+            .message(message)
+            .detail(detail)
             .buttons(["Cancel", "Delete"])
             .cancel_button(0)
             .default_button(0)
             .build();
 
         let state = self.clone();
-        let path = path.to_path_buf();
         dialog.choose(Some(&self.window), gio::Cancellable::NONE, move |choice| {
             if choice != Ok(1) {
                 return;
             }
-            match filesystem::delete_permanently(&path) {
-                Ok(_) => state.refresh(),
-                Err(e) => eprintln!("Failed to delete: {}", e),
+            for path in &paths {
+                if let Err(e) = filesystem::delete_permanently(path) {
+                    eprintln!("Failed to delete {}: {}", path.display(), e);
+                }
             }
+            state.after_file_op();
         });
     }
 }
@@ -388,6 +504,16 @@ fn install_actions(state: &Rc<AppState>) {
     simple("refresh", |s| s.refresh());
     simple("cycle-view", |s| s.cycle_view_mode());
     simple("about", |s| show_about(&s.window));
+    simple("open-selection", |s| s.open_selection());
+    simple("rename-selection", |s| s.rename_selection());
+    simple("trash-selection", |s| s.trash_selection());
+    simple("delete-selection", |s| s.confirm_delete_all(s.selection()));
+    simple("select-all", |s| {
+        if s.file_view_active() {
+            s.file_view.select_all();
+        }
+    });
+    simple("unselect-all", |s| s.clear_selection());
 
     // Stateful boolean toggles (drive check marks / toggle buttons).
     let toggle = |name: &str, initial: bool, f: fn(&Rc<AppState>, bool)| {

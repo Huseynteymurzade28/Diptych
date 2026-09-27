@@ -1,6 +1,7 @@
 use gtk4::gdk;
+use gtk4::gio;
 use gtk4::prelude::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 // ═══════════════════════════════════════════════
 //  External Drag & Drop Source
@@ -24,48 +25,71 @@ pub fn attach_file_drag_source(
     _icon_name: &str,
     is_dir: bool,
 ) {
+    let path = file_path.to_path_buf();
+    attach_drag_source(widget, move || vec![(path.clone(), is_dir)]);
+}
+
+/// Attach a drag source whose payload is decided when the drag starts:
+/// `items` returns the `(path, is_dir)` pairs to drag (e.g. the whole
+/// selection). An empty list cancels the drag.
+pub fn attach_drag_source(
+    widget: &impl IsA<gtk4::Widget>,
+    items: impl Fn() -> Vec<(PathBuf, bool)> + 'static,
+) {
     let drag_source = gtk4::DragSource::new();
     drag_source.set_actions(gdk::DragAction::COPY | gdk::DragAction::MOVE);
 
-    let file_uri = path_to_file_uri(file_path);
-    let path_owned = file_path.to_path_buf();
+    // Payload and ghost are computed together in `prepare`.
+    let ghost = std::rc::Rc::new(std::cell::RefCell::new(String::new()));
 
     // ── Prepare content ──
     {
-        let file_uri = file_uri.clone();
-        let path_owned = path_owned.clone();
+        let ghost = ghost.clone();
         drag_source.connect_prepare(move |_source, _x, _y| {
-            let g_file = gtk4::gio::File::for_path(&path_owned);
-            let file_content = gdk::ContentProvider::for_value(&g_file.to_value());
+            let items = items();
+            let first = items.first()?;
 
-            let uri_list = format!("{}\r\n", file_uri);
+            let files: Vec<gio::File> = items.iter().map(|(p, _)| gio::File::for_path(p)).collect();
+            let file_list = gdk::FileList::from_array(&files);
+            let file_content = gdk::ContentProvider::for_value(&file_list.to_value());
+
+            let uri_list: String = items
+                .iter()
+                .map(|(p, _)| format!("{}\r\n", path_to_file_uri(p)))
+                .collect();
             let uri_content = gdk::ContentProvider::for_value(&uri_list.to_value());
 
-            let union = gdk::ContentProvider::new_union(&[file_content, uri_content]);
-            Some(union)
+            *ghost.borrow_mut() = if items.len() == 1 {
+                let name = first
+                    .0
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "file".to_string());
+                // Truncate long names for the ghost
+                let icon_emoji = if first.1 { "📁" } else { "📄" };
+                format!(
+                    " {} {} ",
+                    icon_emoji,
+                    crate::core::truncate_chars(&name, 30)
+                )
+            } else {
+                format!(" 📄 {} items ", items.len())
+            };
+
+            Some(gdk::ContentProvider::new_union(&[
+                file_content,
+                uri_content,
+            ]))
         });
     }
 
     // ── Ghost image via cairo → GdkTexture ──
-    {
-        let display_name = file_path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "file".to_string());
-
-        // Truncate long names for the ghost
-        let short_name = crate::core::truncate_chars(&display_name, 30);
-
-        let icon_emoji = if is_dir { "📁" } else { "📄" };
-        let ghost_text = format!(" {} {} ", icon_emoji, short_name);
-
-        drag_source.connect_drag_begin(move |source, _drag| {
-            // Render the ghost label to a cairo surface → GdkTexture
-            if let Some(texture) = render_ghost_texture(&ghost_text) {
-                source.set_icon(Some(&texture), 16, 16);
-            }
-        });
-    }
+    drag_source.connect_drag_begin(move |source, _drag| {
+        // Render the ghost label to a cairo surface → GdkTexture
+        if let Some(texture) = render_ghost_texture(&ghost.borrow()) {
+            source.set_icon(Some(&texture), 16, 16);
+        }
+    });
 
     widget.add_controller(drag_source);
 }

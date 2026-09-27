@@ -24,14 +24,20 @@ pub fn list_directory(path: &Path, include_hidden: bool) -> Vec<Entry> {
         Err(e) => eprintln!("Failed to read directory entries: {}", e),
     }
 
-    // Sort: directories first, then files alphabetically
-    file_list.sort_by(|a, b| match (a.is_dir, b.is_dir) {
-        (true, false) => std::cmp::Ordering::Less,
-        (false, true) => std::cmp::Ordering::Greater,
-        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-    });
-
+    file_list.sort_by(Entry::display_cmp);
     file_list
+}
+
+/// Counts the items in `path` without reading their metadata.
+pub fn count_entries(path: &Path, include_hidden: bool) -> usize {
+    fs::read_dir(path)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter(|e| include_hidden || !e.file_name().to_string_lossy().starts_with('.'))
+                .count()
+        })
+        .unwrap_or(0)
 }
 
 /// Creates a new directory inside `parent`.

@@ -98,7 +98,7 @@ fn build_image_preview(container: &Box, file_path: &Path, max_w: i32, max_h: i32
                     container.remove(&child);
                 }
 
-                let picture = Picture::for_pixbuf(&pixbuf);
+                let picture = Picture::for_paintable(&gtk4::gdk::Texture::for_pixbuf(&pixbuf));
                 picture.set_can_shrink(true);
                 picture.set_halign(Align::Center);
                 picture.set_valign(Align::Center);
@@ -181,7 +181,7 @@ fn build_video_placeholder(container: &Box, file_path: &Path) {
     };
 
     if let Some(pixbuf) = thumb_available {
-        let picture = Picture::for_pixbuf(&pixbuf);
+        let picture = Picture::for_paintable(&gtk4::gdk::Texture::for_pixbuf(&pixbuf));
         picture.set_can_shrink(true);
         picture.set_halign(Align::Center);
         picture.set_valign(Align::Center);
@@ -242,7 +242,7 @@ pub fn build_tooltip_preview(file_path: &Path) -> Option<Image> {
     let cache = thumbnail::ThumbnailCache::new();
     if let Some(cached) = cache.get(file_path) {
         return load_scaled_pixbuf(&cached, 96, 96).map(|pb| {
-            let img = Image::from_pixbuf(Some(&pb));
+            let img = Image::from_paintable(Some(&gtk4::gdk::Texture::for_pixbuf(&pb)));
             img.add_css_class("preview-tooltip-image");
             img
         });
@@ -251,7 +251,7 @@ pub fn build_tooltip_preview(file_path: &Path) -> Option<Image> {
     // For images we can generate synchronously (fast enough for tooltip)
     if is_image(&ext) {
         load_scaled_pixbuf(file_path, 96, 96).map(|pb| {
-            let img = Image::from_pixbuf(Some(&pb));
+            let img = Image::from_paintable(Some(&gtk4::gdk::Texture::for_pixbuf(&pb)));
             img.add_css_class("preview-tooltip-image");
             img
         })

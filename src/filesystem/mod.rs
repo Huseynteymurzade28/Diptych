@@ -5,6 +5,7 @@ mod entry;
 mod grouping;
 mod ops;
 
-pub use entry::Entry;
-pub use grouping::group_entries;
-pub use ops::{create_directory, create_file, delete_permanently, list_directory, move_to_trash};
+pub use entry::{format_size, Entry};
+pub use ops::{
+    count_entries, create_directory, create_file, delete_permanently, list_directory, move_to_trash,
+};
