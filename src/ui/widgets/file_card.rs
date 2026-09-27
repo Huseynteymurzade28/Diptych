@@ -1,25 +1,21 @@
 use crate::config::{AppConfig, IconTheme};
-use crate::core::truncate_chars;
 use crate::filesystem::Entry;
 use crate::thumbnail;
-use crate::ui::drag_source;
 use crate::ui::widgets::icon::{icon_css_class, icon_for_entry_themed};
 use gtk4::prelude::*;
-use gtk4::{Align, Box, Button, Image, Label, Orientation};
+use gtk4::{Align, Box, Image, Label, Orientation};
 
 // ═══════════════════════════════════════════════
 //  Grid Card Widget
 // ═══════════════════════════════════════════════
 
-/// Creates a card-style widget for grid view.
-pub fn create_file_card(entry: &Entry, config: &AppConfig) -> Button {
+/// Creates a card-style widget for grid view (a `GridView` item).
+pub fn create_file_card(entry: &Entry, config: &AppConfig) -> Box {
     let icon_name = icon_for_entry_themed(entry, &config.icon_theme);
 
     let card_box = Box::builder()
         .orientation(Orientation::Vertical)
         .spacing(6)
-        .halign(Align::Center)
-        .valign(Align::Center)
         .build();
 
     // Check if this file supports a thumbnail preview
@@ -45,15 +41,20 @@ pub fn create_file_card(entry: &Entry, config: &AppConfig) -> Button {
             .build()
     };
 
+    // Two lines at most, middle-ellipsized: long names never widen the card
+    // (the grid's column width follows its widest card).
     let name_label = Label::builder()
-        .label(&truncate_chars(&entry.name, 18))
+        .label(&entry.name)
         .css_classes(vec!["file-card-name".to_string()])
         .halign(Align::Center)
         .wrap(true)
-        .max_width_chars(16)
+        .wrap_mode(gtk4::pango::WrapMode::WordChar)
+        .lines(2)
+        .ellipsize(gtk4::pango::EllipsizeMode::Middle)
+        .width_chars(1)
+        .max_width_chars(1)
         .justify(gtk4::Justification::Center)
         .build();
-    name_label.set_tooltip_text(Some(&entry.name));
 
     card_box.append(&icon);
     card_box.append(&name_label);
@@ -77,16 +78,9 @@ pub fn create_file_card(entry: &Entry, config: &AppConfig) -> Button {
     }
 
     // Card size adapts to icon_size
-    let card_width = (config.icon_size as i32).max(48) + 40;
-    let btn = Button::builder()
-        .child(&card_box)
-        .css_classes(vec!["file-card".to_string()])
-        .width_request(card_width)
-        .has_frame(false)
-        .build();
-
-    // ── External drag & drop source (files AND folders) ──
-    drag_source::attach_file_drag_source(&btn, &entry.path, icon_name, entry.is_dir);
-
-    btn
+    let card_width = config.icon_size.max(48) + 72;
+    card_box.add_css_class("file-card");
+    card_box.set_halign(Align::Center);
+    card_box.set_width_request(card_width);
+    card_box
 }

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-gtk4 = { version = "0.10.3", features = ["v4_10"] }
+gtk4 = { version = "0.10.3", features = ["v4_12"] }
 adw = { package = "libadwaita", version = "0.8", features = ["v1_5"] }
 glib = "0.21.5"
 dirs = "6.0.0"

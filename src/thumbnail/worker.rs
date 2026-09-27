@@ -64,7 +64,7 @@ pub fn request_thumbnail(source_path: &Path, icon_size: i32) -> Image {
     // ── Fast path: cache hit ──
     if let Some(cached) = cache().get(source_path) {
         if let Some(pb) = load_pixbuf_scaled(&cached, icon_size) {
-            image.set_from_pixbuf(Some(&pb));
+            image.set_paintable(Some(&gtk4::gdk::Texture::for_pixbuf(&pb)));
             image.remove_css_class("thumbnail-placeholder");
             image.add_css_class("thumbnail-loaded");
             return image;
@@ -93,7 +93,7 @@ pub fn request_thumbnail(source_path: &Path, icon_size: i32) -> Image {
 
             if ok {
                 if let Some(pb) = load_pixbuf_scaled(&thumb_dest, pixel_size) {
-                    image.set_from_pixbuf(Some(&pb));
+                    image.set_paintable(Some(&gtk4::gdk::Texture::for_pixbuf(&pb)));
                     image.remove_css_class("thumbnail-placeholder");
                     image.add_css_class("thumbnail-loaded");
                     return;

@@ -34,6 +34,12 @@ pub fn refresh(state: &Rc<AppState>) {
         pane.remove(&child);
     }
 
+    let selection = state.selection();
+    if selection.len() > 1 {
+        multi_selection(pane, &selection);
+        return;
+    }
+
     let (entry, is_selection) = match state.selected() {
         Some(path) => (Entry::from_path(&path), true),
         None => (Entry::from_path(&state.current_path()), false),
@@ -100,7 +106,8 @@ pub fn refresh(state: &Rc<AppState>) {
         let hint = Label::builder()
             .label(match state.config.borrow().open_with {
                 crate::config::OpenWith::DoubleClick => {
-                    "Click an item to see its details. Double-click to open it."
+                    "Click an item to see its details, Ctrl/Shift-click to select several. \
+                     Double-click to open."
                 }
                 crate::config::OpenWith::SingleClick => {
                     "Right-click an item for its actions. Click to open it."
@@ -115,6 +122,83 @@ pub fn refresh(state: &Rc<AppState>) {
 }
 
 // ─── Pieces ───
+
+/// Summary for several selected items: count, total size, bulk actions.
+fn multi_selection(pane: &Box, paths: &[std::path::PathBuf]) {
+    let entries: Vec<Entry> = paths.iter().map(|p| Entry::from_path(p)).collect();
+    let folders = entries.iter().filter(|e| e.is_dir).count();
+    let files = entries.len() - folders;
+
+    let icon = Image::builder()
+        .icon_name("edit-select-all-symbolic")
+        .pixel_size(96)
+        .hexpand(true)
+        .valign(Align::Center)
+        .build();
+    let frame = Box::builder()
+        .height_request(160)
+        .css_classes(["inspector-preview"])
+        .build();
+    frame.append(&icon);
+    pane.append(&frame);
+
+    pane.append(
+        &Label::builder()
+            .label(format!("{} items selected", entries.len()))
+            .css_classes(["inspector-title"])
+            .xalign(0.0)
+            .build(),
+    );
+    let plural = |n: usize, word: &str| format!("{} {}{}", n, word, if n == 1 { "" } else { "s" });
+    let mut kinds = vec![];
+    if folders > 0 {
+        kinds.push(plural(folders, "folder"));
+    }
+    if files > 0 {
+        let bytes: u64 = entries.iter().filter(|e| !e.is_dir).map(|e| e.size).sum();
+        kinds.push(format!(
+            "{} ({})",
+            plural(files, "file"),
+            filesystem::format_size(bytes)
+        ));
+    }
+    pane.append(
+        &Label::builder()
+            .label(kinds.join(", "))
+            .css_classes(["inspector-subtitle"])
+            .xalign(0.0)
+            .wrap(true)
+            .build(),
+    );
+
+    let column = Box::builder()
+        .orientation(Orientation::Vertical)
+        .spacing(8)
+        .build();
+    let open = Button::builder()
+        .label("Open All")
+        .action_name("win.open-selection")
+        .css_classes(["btn-primary"])
+        .build();
+    let row = Box::builder().spacing(8).homogeneous(true).build();
+    let trash = Button::builder()
+        .label("Move to Trash")
+        .action_name("win.trash-selection")
+        .css_classes(["btn-secondary", "context-menu-danger"])
+        .build();
+    let delete = Button::builder()
+        .label("Delete…")
+        .action_name("win.delete-selection")
+        .css_classes(["btn-secondary", "context-menu-danger"])
+        .build();
+    row.append(&trash);
+    row.append(&delete);
+    if files > 0 {
+        column.append(&open);
+    }
+    column.append(&row);
+    pane.append(&column);
+}
 
 fn display_name(entry: &Entry) -> String {
     if entry.path == Path::new("/") {
@@ -167,8 +251,7 @@ fn field_value(
     match field {
         InspectorField::Kind => None, // shown as the subtitle
         InspectorField::Size if entry.is_dir => {
-            let n =
-                filesystem::list_directory(&entry.path, state.config.borrow().show_hidden).len();
+            let n = filesystem::count_entries(&entry.path, state.config.borrow().show_hidden);
             Some((
                 "Contains",
                 format!("{} item{}", n, if n == 1 { "" } else { "s" }),

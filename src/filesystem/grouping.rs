@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::time::SystemTime;
 
 use crate::config::GroupBy;
@@ -42,23 +41,4 @@ impl Entry {
             }
         }
     }
-}
-
-/// Groups a slice of entries by the given grouping strategy.
-/// Returns an ordered list of (group_name, entries) pairs.
-pub fn group_entries<'a>(
-    entries: &'a [Entry],
-    group_by: &GroupBy,
-) -> Vec<(String, Vec<&'a Entry>)> {
-    if *group_by == GroupBy::None {
-        return vec![("".to_string(), entries.iter().collect())];
-    }
-
-    let mut map: BTreeMap<String, Vec<&Entry>> = BTreeMap::new();
-    for entry in entries {
-        let key = entry.group_key(group_by);
-        map.entry(key).or_default().push(entry);
-    }
-
-    map.into_iter().collect()
 }
