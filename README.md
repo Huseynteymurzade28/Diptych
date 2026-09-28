@@ -39,6 +39,10 @@ their widths, header bar items and their order, inspector fields, and window dec
 ([docs/layout.md](docs/layout.md)). Diptych adapts to GNOME, KDE Plasma and tiling compositors like
 Hyprland ([docs/desktops.md](docs/desktops.md)).
 
+Every shortcut can be changed in `~/.config/diptych/keybindings.toml`, and your own commands
+("Open terminal here", "Convert to PNG", …) go in `~/.config/diptych/actions.toml`: they appear in the
+right-click menu and can have their own shortcut ([docs/shortcuts.md](docs/shortcuts.md)).
+
 ## 🛠️ Development Setup
 
 You can develop Diptych on **any operating system**.

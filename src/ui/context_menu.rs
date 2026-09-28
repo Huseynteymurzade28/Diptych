@@ -11,7 +11,7 @@ use std::rc::Rc;
 // ═══════════════════════════════════════════════
 //
 // Background context menu — right-click on empty space
-//   → "New Folder", "New File", "Select All", "Refresh"
+//   → "New Folder", "New File", your actions.toml actions, "Select All", "Refresh"
 // (The item menu is a shared `gio::Menu` in `file_view.rs`.)
 //
 // All actual work is delegated to `AppState`.
@@ -32,9 +32,16 @@ pub fn attach_background_context_menu(target: &impl IsA<Widget>, state: &Rc<AppS
     let refresh_btn = context_menu_button("view-refresh-symbolic", "Refresh");
     refresh_btn.set_action_name(Some("win.refresh"));
 
+    // actions.toml entries for the folder itself; rebuilt on every popup.
+    let custom_box = gtk4::Box::builder()
+        .orientation(Orientation::Vertical)
+        .spacing(2)
+        .build();
+
     let menu_box = menu_box();
     menu_box.append(&new_folder_btn);
     menu_box.append(&new_file_btn);
+    menu_box.append(&custom_box);
     menu_box.append(&menu_separator());
     menu_box.append(&select_all_btn);
     menu_box.append(&refresh_btn);
@@ -63,7 +70,26 @@ pub fn attach_background_context_menu(target: &impl IsA<Widget>, state: &Rc<AppS
     }
 
     let gesture = GestureClick::builder().button(3).build();
+    let state = state.clone();
     gesture.connect_pressed(move |_gesture, _n, x, y| {
+        // The menu is about the folder, so actions run on the folder.
+        state.clear_selection();
+        while let Some(child) = custom_box.first_child() {
+            custom_box.remove(&child);
+        }
+        let entries = state.applicable_actions();
+        if !entries.is_empty() {
+            custom_box.append(&menu_separator());
+        }
+        for (index, action) in entries {
+            let icon = action.icon.as_deref().unwrap_or("system-run-symbolic");
+            let btn = context_menu_button(icon, &action.name);
+            btn.set_action_name(Some("win.run-action"));
+            btn.set_action_target_value(Some(&(index as i32).to_variant()));
+            let popover_c = popover.clone();
+            btn.connect_clicked(move |_| popover_c.popdown());
+            custom_box.append(&btn);
+        }
         // Position the popover at the click coordinates
         popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
         popover.popup();

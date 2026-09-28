@@ -44,6 +44,11 @@ pub struct FileView {
     pub root: gtk4::Overlay,
     status: gtk4::Label,
     item_menu: gtk4::PopoverMenu,
+    /// actions.toml entries that apply to the selection; filled on popup.
+    custom_menu: gio::Menu,
+    /// View-scope shortcuts from keybindings.toml (Delete, F2, …).
+    shortcuts: gtk4::ShortcutController,
+    state: RefCell<Weak<AppState>>,
 
     dir: RefCell<Option<PathBuf>>,
     show_hidden: Cell<bool>,
@@ -82,10 +87,6 @@ impl FileView {
             .enable_rubberband(true)
             .css_classes(["file-list"])
             .build();
-        for view in [grid.upcast_ref::<gtk4::Widget>(), list.upcast_ref()] {
-            view.add_controller(selection_shortcuts());
-        }
-
         let scroll = gtk4::ScrolledWindow::builder()
             .hscrollbar_policy(gtk4::PolicyType::Never)
             .vexpand(true)
@@ -103,8 +104,12 @@ impl FileView {
             .build();
         let root = gtk4::Overlay::builder().child(&scroll).build();
         root.add_overlay(&status);
+        // Key events bubble up from the focused grid / list to here.
+        let shortcuts = gtk4::ShortcutController::new();
+        root.add_controller(shortcuts.clone());
 
-        let item_menu = gtk4::PopoverMenu::from_model(Some(&item_menu_model()));
+        let custom_menu = gio::Menu::new();
+        let item_menu = gtk4::PopoverMenu::from_model(Some(&item_menu_model(&custom_menu)));
         item_menu.add_css_class("context-menu");
         item_menu.set_has_arrow(false);
         item_menu.set_halign(gtk4::Align::Start);
@@ -120,6 +125,9 @@ impl FileView {
             root,
             status,
             item_menu,
+            custom_menu,
+            shortcuts,
+            state: RefCell::new(Weak::new()),
             dir: RefCell::new(None),
             show_hidden: Cell::new(false),
             paths: RefCell::new(HashSet::new()),
@@ -136,6 +144,7 @@ impl FileView {
 
     /// Connects the view to the app. Call once, after `AppState` exists.
     pub fn bind(self: &Rc<Self>, state: &Rc<AppState>) {
+        *self.state.borrow_mut() = Rc::downgrade(state);
         for view in [
             self.grid.upcast_ref::<gtk4::Widget>(),
             self.list.upcast_ref(),
@@ -568,7 +577,23 @@ impl FileView {
             1,
             1,
         )));
+        if let Some(state) = self.state.borrow().upgrade() {
+            state.fill_action_menu(&self.custom_menu);
+        }
         self.item_menu.popup();
+    }
+
+    /// Replaces the view-scope shortcuts: `(accelerator, "win.action")`.
+    pub fn set_shortcuts(&self, shortcuts: &[(String, String)]) {
+        while let Some(old) = self.shortcuts.item(0).and_downcast::<gtk4::Shortcut>() {
+            self.shortcuts.remove_shortcut(&old);
+        }
+        for (trigger, action) in shortcuts {
+            self.shortcuts.add_shortcut(gtk4::Shortcut::new(
+                gtk4::ShortcutTrigger::parse_string(trigger),
+                Some(gtk4::NamedAction::new(action)),
+            ));
+        }
     }
 
     // ─── Item widgets ───
@@ -701,32 +726,17 @@ fn header_factory(grouping: GroupBy) -> gtk4::SignalListItemFactory {
 }
 
 /// The item context menu; every entry is a `win.*` selection action.
-fn item_menu_model() -> gio::Menu {
+/// `custom` holds the applicable actions.toml entries.
+fn item_menu_model(custom: &gio::Menu) -> gio::Menu {
     let menu = gio::Menu::new();
     let open = gio::Menu::new();
     open.append(Some("Open"), Some("win.open-selection"));
     open.append(Some("Rename…"), Some("win.rename-selection"));
     menu.append_section(None, &open);
+    menu.append_section(None, custom);
     let remove = gio::Menu::new();
     remove.append(Some("Move to Trash"), Some("win.trash-selection"));
     remove.append(Some("Delete Permanently…"), Some("win.delete-selection"));
     menu.append_section(None, &remove);
     menu
-}
-
-/// Keys that act on the selection while the view has focus.
-fn selection_shortcuts() -> gtk4::ShortcutController {
-    let controller = gtk4::ShortcutController::new();
-    for (trigger, action) in [
-        ("Escape", "win.unselect-all"),
-        ("Delete", "win.trash-selection"),
-        ("<Shift>Delete", "win.delete-selection"),
-        ("F2", "win.rename-selection"),
-    ] {
-        controller.add_shortcut(gtk4::Shortcut::new(
-            gtk4::ShortcutTrigger::parse_string(trigger),
-            Some(gtk4::NamedAction::new(action)),
-        ));
-    }
-    controller
 }

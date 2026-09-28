@@ -1,12 +1,14 @@
-use crate::config::{AppConfig, LayoutConfig, OpenWith, ViewMode};
+use crate::config::actions::{CustomAction, Target};
+use crate::config::{Actions, AppConfig, Keybindings, LayoutConfig, OpenWith, ViewMode};
 use crate::filesystem::{self, Entry};
 use crate::theme::ThemeManager;
 use crate::ui::chrome::Chrome;
 use crate::ui::file_view::FileView;
-use crate::ui::{content, inspector, settings, sidebar};
+use crate::ui::{content, inspector, settings, shortcuts, sidebar};
 use adw::prelude::*;
 use gtk4::{Box, ScrolledWindow};
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -26,6 +28,8 @@ use std::rc::Rc;
 pub struct AppState {
     pub config: RefCell<AppConfig>,
     pub layout: RefCell<LayoutConfig>,
+    pub keybindings: RefCell<Keybindings>,
+    pub actions: RefCell<Actions>,
     current_path: RefCell<PathBuf>,
     /// Selected items, mirrored from the file view (or set by the tree view).
     selected: RefCell<Vec<PathBuf>>,
@@ -34,6 +38,9 @@ pub struct AppState {
     back: RefCell<Vec<PathBuf>>,
     forward: RefCell<Vec<PathBuf>>,
     settings_visible: Cell<bool>,
+    /// The toast about each config file's current error, so a fix (or a
+    /// newer error) replaces it instead of piling up.
+    config_toasts: RefCell<HashMap<String, adw::Toast>>,
 
     pub window: adw::ApplicationWindow,
     pub theme: Rc<ThemeManager>,
@@ -65,18 +72,23 @@ impl AppState {
     pub fn new(
         config: AppConfig,
         layout: LayoutConfig,
+        keybindings: Keybindings,
+        actions: Actions,
         start_path: PathBuf,
         w: StateWidgets,
     ) -> Rc<Self> {
         let state = Rc::new(Self {
             config: RefCell::new(config),
             layout: RefCell::new(layout),
+            keybindings: RefCell::new(keybindings),
+            actions: RefCell::new(actions),
             current_path: RefCell::new(start_path),
             selected: RefCell::new(vec![]),
             selected_widget: RefCell::new(glib::WeakRef::new()),
             back: RefCell::new(vec![]),
             forward: RefCell::new(vec![]),
             settings_visible: Cell::new(false),
+            config_toasts: RefCell::new(HashMap::new()),
             window: w.window,
             theme: w.theme,
             chrome: w.chrome,
@@ -88,6 +100,7 @@ impl AppState {
             inspector: w.inspector,
         });
         install_actions(&state);
+        state.apply_shortcuts();
         state
     }
 
@@ -299,6 +312,29 @@ impl AppState {
         crate::ui::context_menu::show_rename_dialog(self, &anchor, &path);
     }
 
+    /// Opens the header's "New" popover, or asks for a folder name when
+    /// the header button is hidden.
+    pub fn show_new(self: &Rc<Self>) {
+        let button = &self.chrome.new_button;
+        if button.is_mapped() {
+            button.popup();
+            return;
+        }
+        let anchor = if self.file_view_active() {
+            self.file_view.anchor()
+        } else {
+            self.content_scroll.clone().upcast()
+        };
+        let state = self.clone();
+        crate::ui::context_menu::show_name_dialog(
+            &anchor,
+            "Create Folder",
+            "Create",
+            "",
+            move |name| state.create(name, true),
+        );
+    }
+
     pub fn trash_selection(self: &Rc<Self>) {
         self.trash_all(&self.selection());
     }
@@ -325,10 +361,168 @@ impl AppState {
                 self.chrome.apply(&layout);
                 *self.layout.borrow_mut() = layout;
                 inspector::refresh(self);
+                self.config_status("layout.toml", None);
                 println!("[layout] Applied layout.toml");
             }
-            Err(e) => eprintln!("[layout] layout.toml: {} (keeping previous layout)", e),
+            Err(e) => self.config_status("layout.toml", Some(&e)),
         }
+    }
+
+    // ─── Shortcuts & custom actions ───
+
+    /// Re-reads keybindings.toml (hot reload).
+    pub fn reload_keybindings(self: &Rc<Self>) {
+        let dir = crate::config::persistence::config_dir();
+        match Keybindings::load(&dir) {
+            Ok(keys) => {
+                *self.keybindings.borrow_mut() = keys;
+                self.apply_shortcuts();
+                self.config_status("keybindings.toml", None);
+                println!("[keys] Applied keybindings.toml");
+            }
+            Err(e) => self.config_status("keybindings.toml", Some(&e)),
+        }
+    }
+
+    /// Re-reads actions.toml (hot reload).
+    pub fn reload_actions(self: &Rc<Self>) {
+        let dir = crate::config::persistence::config_dir();
+        match Actions::load(&dir) {
+            Ok(actions) => {
+                *self.actions.borrow_mut() = actions;
+                self.apply_shortcuts();
+                self.config_status("actions.toml", None);
+                println!("[actions] Applied actions.toml");
+            }
+            Err(e) => self.config_status("actions.toml", Some(&e)),
+        }
+    }
+
+    fn apply_shortcuts(self: &Rc<Self>) {
+        let errors = shortcuts::apply(self);
+        self.chrome
+            .set_shortcut_hints(|action| shortcuts::label_for(&self.window, action));
+        let message = match errors.as_slice() {
+            [] => None,
+            [one] => Some(one.clone()),
+            [first, rest @ ..] => Some(format!("{} (+{} more)", first, rest.len())),
+        };
+        if let Some(old) = self.config_toasts.borrow_mut().remove("shortcuts") {
+            old.dismiss();
+        }
+        if let Some(message) = message {
+            let toast = self.toast(&message);
+            self.config_toasts
+                .borrow_mut()
+                .insert("shortcuts".into(), toast);
+        }
+    }
+
+    /// Reports a config file's error (the previous settings stay), or
+    /// clears the report once the file is fixed.
+    pub fn config_status(&self, file: &str, error: Option<&str>) {
+        if let Some(old) = self.config_toasts.borrow_mut().remove(file) {
+            old.dismiss();
+        }
+        let Some(error) = error else { return };
+        eprintln!("[config] {}: {} (keeping previous settings)", file, error);
+        let toast = self.toast(&format!("{}: {}", file, summarize_error(error)));
+        self.config_toasts.borrow_mut().insert(file.into(), toast);
+    }
+
+    fn target_selection(&self) -> Vec<(PathBuf, bool)> {
+        self.selection()
+            .into_iter()
+            .map(|p| {
+                let dir = p.is_dir();
+                (p, dir)
+            })
+            .collect()
+    }
+
+    /// actions.toml entries that apply to the current selection, with
+    /// their index (the `win.run-action` target).
+    pub fn applicable_actions(&self) -> Vec<(usize, CustomAction)> {
+        let dir = self.current_path();
+        let selection = self.target_selection();
+        let target = Target {
+            dir: &dir,
+            selection: &selection,
+        };
+        self.actions
+            .borrow()
+            .0
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| a.applies_to(&target))
+            .map(|(i, a)| (i, a.clone()))
+            .collect()
+    }
+
+    /// Fills `menu` with the applicable custom actions.
+    pub fn fill_action_menu(&self, menu: &gio::Menu) {
+        menu.remove_all();
+        for (index, action) in self.applicable_actions() {
+            let item = gio::MenuItem::new(Some(&action.name), None);
+            item.set_action_and_target_value(
+                Some("win.run-action"),
+                Some(&(index as i32).to_variant()),
+            );
+            menu.append_item(&item);
+        }
+    }
+
+    /// Runs actions.toml entry `index` on the selection (or the folder).
+    pub fn run_action(self: &Rc<Self>, index: usize) {
+        let Some(action) = self.actions.borrow().0.get(index).cloned() else {
+            return;
+        };
+        let dir = self.current_path();
+        let selection = self.target_selection();
+        let target = Target {
+            dir: &dir,
+            selection: &selection,
+        };
+        if !action.applies_to(&target) {
+            self.toast(&format!("“{}” doesn’t apply to the selection", action.name));
+            return;
+        }
+        let argv = match action.argv(&target) {
+            Ok(argv) => argv,
+            Err(e) => {
+                self.toast(&e);
+                return;
+            }
+        };
+        let launcher = gio::SubprocessLauncher::new(gio::SubprocessFlags::NONE);
+        launcher.set_cwd(&dir);
+        let args: Vec<&std::ffi::OsStr> = argv.iter().map(|a| a.as_ref()).collect();
+        let process = match launcher.spawn(&args) {
+            Ok(p) => p,
+            Err(e) => {
+                self.toast(&format!("Couldn’t run “{}”: {}", action.name, e.message()));
+                return;
+            }
+        };
+        let weak = Rc::downgrade(self);
+        process.wait_check_async(gio::Cancellable::NONE, move |result| {
+            if let (Err(e), Some(state)) = (result, weak.upgrade()) {
+                state.toast(&format!("“{}” failed: {}", action.name, e.message()));
+            }
+        });
+    }
+
+    // ─── Messages ───
+
+    /// Shows a short message at the bottom of the window.
+    pub fn toast(&self, message: &str) -> adw::Toast {
+        eprintln!("{}", message);
+        let toast = adw::Toast::builder()
+            .title(glib::markup_escape_text(message))
+            .timeout(5)
+            .build();
+        self.chrome.toasts.add_toast(toast.clone());
+        toast
     }
 
     // ─── Config ───
@@ -514,6 +708,33 @@ fn install_actions(state: &Rc<AppState>) {
         }
     });
     simple("unselect-all", |s| s.clear_selection());
+    simple("go-home", |s| {
+        if let Some(home) = dirs::home_dir() {
+            s.navigate_to(home);
+        }
+    });
+    simple("new", |s| s.show_new());
+    simple("toggle-sidebar", |s| {
+        let split = &s.chrome.sidebar_split;
+        split.set_show_sidebar(!split.shows_sidebar());
+    });
+    simple("toggle-inspector", |s| {
+        let split = &s.chrome.inspector_split;
+        split.set_show_sidebar(!split.shows_sidebar());
+    });
+    simple("close-window", |s| s.window.close());
+
+    // Custom actions from actions.toml, by index.
+    {
+        let s = state.clone();
+        let action = gio::SimpleAction::new("run-action", Some(glib::VariantTy::INT32));
+        action.connect_activate(move |_, param| {
+            if let Some(i) = param.and_then(|p| p.get::<i32>()) {
+                s.run_action(i.max(0) as usize);
+            }
+        });
+        state.window.add_action(&action);
+    }
 
     // Stateful boolean toggles (drive check marks / toggle buttons).
     let toggle = |name: &str, initial: bool, f: fn(&Rc<AppState>, bool)| {
@@ -606,6 +827,27 @@ fn view_mode_from_id(id: &str) -> Option<ViewMode> {
     })
 }
 
+/// One line out of a (possibly multi-line) config error. TOML errors put
+/// the position first and the reason last:
+/// "TOML parse error at line 4, column 8 … unknown field `kye`".
+fn summarize_error(error: &str) -> String {
+    let lines: Vec<&str> = error
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
+    let (Some(first), Some(last)) = (lines.first(), lines.last()) else {
+        return error.to_string();
+    };
+    match first.strip_prefix("TOML parse error at ") {
+        Some(position) if lines.len() > 1 => {
+            let line = position.split(',').next().unwrap_or(position);
+            format!("{}: {}", line, last)
+        }
+        _ => first.to_string(),
+    }
+}
+
 /// Rejects names that would escape the folder or can't exist on disk.
 pub fn validate_name(name: &str) -> Result<(), String> {
     let name = name.trim();
@@ -623,7 +865,22 @@ pub fn validate_name(name: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_name;
+    use super::{summarize_error, validate_name};
+
+    #[test]
+    fn summarizes_toml_errors() {
+        let err =
+            crate::config::Actions::parse("[[action]]\nname = \"x\"\ncommand = \"x\"\nkye = 1")
+                .unwrap_err();
+        assert!(err.contains('\n'));
+        let short = summarize_error(&err);
+        assert!(
+            short.starts_with("line 4: unknown field `kye`"),
+            "{}",
+            short
+        );
+        assert_eq!(summarize_error("unknown action “x”"), "unknown action “x”");
+    }
 
     #[test]
     fn accepts_normal_names() {
