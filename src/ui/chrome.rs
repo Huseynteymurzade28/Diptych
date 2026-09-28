@@ -26,6 +26,8 @@ pub struct Chrome {
     pub inspector_split: adw::OverlaySplitView,
     pub path_bar: gtk4::Box,
     pub new_button: gtk4::MenuButton,
+    /// Wraps everything; `AppState::toast` shows messages here.
+    pub toasts: adw::ToastOverlay,
     items: HashMap<HeaderItem, gtk4::Widget>,
     /// Fixed containers for the header's start / center / end items.
     /// Items only ever move between these (or get hidden): removing a
@@ -59,7 +61,9 @@ impl Chrome {
         let toolbar = adw::ToolbarView::new();
         toolbar.add_top_bar(&header);
         toolbar.set_content(Some(&sidebar_split));
-        window.set_content(Some(&toolbar));
+        let toasts = adw::ToastOverlay::new();
+        toasts.set_child(Some(&toolbar));
+        window.set_content(Some(&toasts));
 
         let path_bar = gtk4::Box::builder()
             .orientation(Orientation::Horizontal)
@@ -133,6 +137,7 @@ impl Chrome {
             inspector_split,
             path_bar,
             new_button,
+            toasts,
             items,
             slots,
             bp_inspector,
@@ -211,6 +216,37 @@ impl Chrome {
     }
 }
 
+impl Chrome {
+    /// Appends each button's current shortcut to its tooltip ("Back (Alt+Left)").
+    /// `shortcut` maps a detailed `win.*` action to its label.
+    pub fn set_shortcut_hints(&self, shortcut: impl Fn(&str) -> Option<String>) {
+        for (item, action, title) in TOOLTIPS {
+            let tip = match shortcut(action) {
+                Some(key) => format!("{} ({})", title, key),
+                None => title.to_string(),
+            };
+            self.items[item].set_tooltip_text(Some(&tip));
+        }
+    }
+}
+
+const TOOLTIPS: &[(HeaderItem, &str, &str)] = &[
+    (
+        HeaderItem::SidebarToggle,
+        "win.toggle-sidebar",
+        "Toggle Sidebar",
+    ),
+    (HeaderItem::Back, "win.back", "Back"),
+    (HeaderItem::Forward, "win.forward", "Forward"),
+    (HeaderItem::Up, "win.go-up", "Parent Folder"),
+    (HeaderItem::New, "win.new", "New Folder or File"),
+    (
+        HeaderItem::InspectorToggle,
+        "win.toggle-inspector",
+        "Toggle Inspector",
+    ),
+];
+
 fn set_width(split: &adw::OverlaySplitView, width: u32) {
     let w = width as f64;
     split.set_min_sidebar_width(w);
@@ -270,23 +306,19 @@ fn build_items(
     HashMap::from([
         (
             SidebarToggle,
-            pane_toggle(
-                "sidebar-show-symbolic",
-                "Toggle Sidebar (F9)",
-                sidebar_split,
-            ),
+            pane_toggle("sidebar-show-symbolic", "Toggle Sidebar", sidebar_split),
         ),
         (
             Back,
-            action_button("go-previous-symbolic", "Back (Alt+←)", "win.back"),
+            action_button("go-previous-symbolic", "Back", "win.back"),
         ),
         (
             Forward,
-            action_button("go-next-symbolic", "Forward (Alt+→)", "win.forward"),
+            action_button("go-next-symbolic", "Forward", "win.forward"),
         ),
         (
             Up,
-            action_button("go-up-symbolic", "Parent Folder (Alt+↑)", "win.go-up"),
+            action_button("go-up-symbolic", "Parent Folder", "win.go-up"),
         ),
         (Path, path.clone().upcast()),
         (New, new_button.clone().upcast()),

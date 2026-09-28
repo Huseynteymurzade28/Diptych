@@ -1,4 +1,6 @@
-use crate::config::{layout, persistence, AppConfig, LayoutConfig};
+use crate::config::{
+    actions, keybindings, layout, persistence, Actions, AppConfig, Keybindings, LayoutConfig,
+};
 use crate::theme::ThemeManager;
 use crate::ui::chrome::Chrome;
 use crate::ui::file_view::FileView;
@@ -26,6 +28,32 @@ pub fn build(app: &adw::Application) {
     let layout = LayoutConfig::load(&config_dir).unwrap_or_else(|e| {
         eprintln!("[layout] {}: {} (using defaults)", layout::LAYOUT_FILE, e);
         LayoutConfig::default()
+    });
+
+    // ── Shortcuts and custom actions (hot-reloaded) ──
+    // Load errors are shown as toasts once the window exists.
+    let mut load_errors = vec![];
+    if let Err(e) = keybindings::seed(&config_dir) {
+        eprintln!(
+            "[keys] Could not create {}: {}",
+            keybindings::KEYBINDINGS_FILE,
+            e
+        );
+    }
+    if let Err(e) = actions::seed(&config_dir) {
+        eprintln!(
+            "[actions] Could not create {}: {}",
+            actions::ACTIONS_FILE,
+            e
+        );
+    }
+    let keys = Keybindings::load(&config_dir).unwrap_or_else(|e| {
+        load_errors.push((keybindings::KEYBINDINGS_FILE, e));
+        Keybindings::default()
+    });
+    let custom_actions = Actions::load(&config_dir).unwrap_or_else(|e| {
+        load_errors.push((actions::ACTIONS_FILE, e));
+        Actions::default()
     });
 
     let start_path = dirs::home_dir()
@@ -96,6 +124,8 @@ pub fn build(app: &adw::Application) {
     let state = AppState::new(
         config,
         layout,
+        keys,
+        custom_actions,
         start_path,
         StateWidgets {
             window: window.clone(),
@@ -137,21 +167,30 @@ pub fn build(app: &adw::Application) {
         state.content_scroll.add_controller(gesture);
     }
 
-    // Hot-reload layout.toml; the watch lives as long as the window.
-    let watch = {
+    for (file, e) in &load_errors {
+        state.config_status(file, Some(e));
+    }
+
+    // Hot-reload the config files; the watches live as long as the window.
+    let watch = |file: &'static str, reload: fn(&std::rc::Rc<AppState>)| {
         let weak = std::rc::Rc::downgrade(&state);
         crate::config::watch::watch(
-            &[config_dir],
-            |name| name == std::path::Path::new(layout::LAYOUT_FILE),
+            std::slice::from_ref(&config_dir),
+            move |name| name == std::path::Path::new(file),
             move || {
                 if let Some(state) = weak.upgrade() {
-                    state.reload_layout();
+                    reload(&state);
                 }
             },
         )
     };
+    let watches = [
+        watch(layout::LAYOUT_FILE, |s| s.reload_layout()),
+        watch(keybindings::KEYBINDINGS_FILE, |s| s.reload_keybindings()),
+        watch(actions::ACTIONS_FILE, |s| s.reload_actions()),
+    ];
     window.connect_destroy(move |_| {
-        let _ = &watch;
+        let _ = &watches;
     });
 
     state.refresh();

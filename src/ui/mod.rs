@@ -11,6 +11,7 @@ pub mod hamburger;
 pub mod inspector;
 pub mod preview;
 pub mod settings;
+pub mod shortcuts;
 pub mod sidebar;
 pub mod snapshot;
 pub mod state;
