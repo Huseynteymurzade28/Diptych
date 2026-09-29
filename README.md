@@ -13,6 +13,11 @@ The name "Diptych" refers to a work of art made of two hinged parts—reflecting
 
 ## 🎨 Customization
 
+Open **Customize** from the main menu (`Ctrl+,`) to change the theme, accent, corners, density,
+fonts, panes, header bar items, shortcuts and your own commands. Every change applies instantly and
+is written to the plain files below, which you can also edit by hand; both stay in sync. `Ctrl+Shift+P`
+opens a command palette with every action.
+
 Everything visual is driven by theme tokens in `~/.config/diptych/theme.toml`,
 which is created on first launch and **applied live whenever you save it**:
 

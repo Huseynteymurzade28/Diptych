@@ -33,7 +33,8 @@ actions use the same one, Diptych keeps the first and reports the other.
 | `toggle-inspector` | `<Ctrl>i` | |
 | `view-mode::grid` / `::list` / `::tree` / `::graph` | `<Ctrl>1` … `<Ctrl>4` | |
 | `cycle-view` | — | Next view mode |
-| `show-settings` | `<Ctrl>comma` | |
+| `show-settings` | `<Ctrl>comma` | Customize dialog |
+| `command-palette` | `<Ctrl><Shift>p`, `<Ctrl>k` | Command palette |
 | `close-window` | `<Ctrl>w`, `<Ctrl>q` | |
 | `about` | — | |
 | `open-selection` | — | ¹ |
@@ -46,6 +47,17 @@ actions use the same one, Diptych keeps the first and reports the other.
 ¹ Active while the file view has focus, so these keys still edit text in the path bar and name fields.
 
 `F10` always opens the main menu. Header bar tooltips show the current shortcuts.
+
+You don't have to edit the file by hand: **Customize → Shortcuts** (`Ctrl+,`) lists every action.
+Click one and press the new keys; if another action already uses them, it gives them up. Changes are
+written back to `keybindings.toml`. Only the actions that differ from the default get a line, and
+your comments stay.
+
+## Command palette
+
+`Ctrl+Shift+P` (or `Ctrl+K`) opens a searchable list of every action above plus your custom actions
+that apply to the current selection. Type a few letters ("shf" finds "Show hidden files"), move
+with `↑`/`↓` and press `Enter`.
 
 ## `actions.toml`
 
@@ -77,7 +89,10 @@ shell   = true
 | `shell` | `false` | Run with `sh -c`, for pipes, `&&`, redirects… |
 | `icon` | `system-run-symbolic` | Icon in the background menu |
 
-Actions show up in the right-click menu when `when` matches: on items for the selection, on empty
+**Customize → Actions** adds, edits and deletes actions without touching the file (comments and the
+commented-out examples stay).
+
+Actions show up in the right-click menu and the command palette when `when` matches: on items for the selection, on empty
 space for the folder (right-clicking empty space clears the selection).
 
 ### Placeholders

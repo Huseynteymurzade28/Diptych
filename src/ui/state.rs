@@ -4,10 +4,10 @@ use crate::filesystem::{self, Entry};
 use crate::theme::ThemeManager;
 use crate::ui::chrome::Chrome;
 use crate::ui::file_view::FileView;
-use crate::ui::{content, inspector, settings, shortcuts, sidebar};
+use crate::ui::{content, customize, inspector, palette, shortcuts, sidebar};
 use adw::prelude::*;
 use gtk4::{Box, ScrolledWindow};
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -37,7 +37,6 @@ pub struct AppState {
     selected_widget: RefCell<glib::WeakRef<gtk4::Widget>>,
     back: RefCell<Vec<PathBuf>>,
     forward: RefCell<Vec<PathBuf>>,
-    settings_visible: Cell<bool>,
     /// The toast about each config file's current error, so a fix (or a
     /// newer error) replaces it instead of piling up.
     config_toasts: RefCell<HashMap<String, adw::Toast>>,
@@ -45,7 +44,7 @@ pub struct AppState {
     pub window: adw::ApplicationWindow,
     pub theme: Rc<ThemeManager>,
     pub chrome: Chrome,
-    /// "files" → `file_view`; "other" → `content_scroll` (tree, graph, settings).
+    /// "files" → `file_view`; "other" → `content_scroll` (tree, graph).
     pub content_stack: gtk4::Stack,
     pub file_view: Rc<FileView>,
     pub content_scroll: ScrolledWindow,
@@ -87,7 +86,6 @@ impl AppState {
             selected_widget: RefCell::new(glib::WeakRef::new()),
             back: RefCell::new(vec![]),
             forward: RefCell::new(vec![]),
-            settings_visible: Cell::new(false),
             config_toasts: RefCell::new(HashMap::new()),
             window: w.window,
             theme: w.theme,
@@ -199,9 +197,7 @@ impl AppState {
 
         self.refresh_header();
         sidebar::refresh_places(self);
-        if !self.settings_visible.get() {
-            content::refresh_content(self);
-        }
+        content::refresh_content(self);
         inspector::refresh(self);
     }
 
@@ -240,11 +236,10 @@ impl AppState {
 
     /// Whether the grid / list file view is on screen.
     pub fn file_view_active(&self) -> bool {
-        !self.settings_visible.get()
-            && matches!(
-                self.config.borrow().view_mode,
-                ViewMode::Grid | ViewMode::List
-            )
+        matches!(
+            self.config.borrow().view_mode,
+            ViewMode::Grid | ViewMode::List
+        )
     }
 
     // ─── Selection ───
@@ -398,7 +393,44 @@ impl AppState {
         }
     }
 
-    fn apply_shortcuts(self: &Rc<Self>) {
+    /// Edits one of the hot-reloaded config files (layout.toml,
+    /// keybindings.toml, actions.toml) in place and applies the result.
+    /// Nothing is written if the edited file wouldn't load.
+    pub fn edit_config_file(
+        self: &Rc<Self>,
+        file: &str,
+        change: impl FnOnce(&mut toml_edit::DocumentMut) -> Result<(), String>,
+    ) -> Result<(), String> {
+        use crate::config::{actions, edit, keybindings, layout};
+        let path = crate::config::persistence::config_dir().join(file);
+        type Check = fn(&str) -> Result<(), String>;
+        let (check, reload): (Check, fn(&Rc<Self>)) = match file {
+            layout::LAYOUT_FILE => (|s| LayoutConfig::parse(s).map(drop), Self::reload_layout),
+            keybindings::KEYBINDINGS_FILE => (
+                |s| Keybindings::parse(s).map(drop),
+                Self::reload_keybindings,
+            ),
+            actions::ACTIONS_FILE => (|s| Actions::parse(s).map(drop), Self::reload_actions),
+            other => return Err(format!("{} can’t be edited here", other)),
+        };
+        edit::update(&path, check, change)?;
+        // The file watcher would pick this up too, but only after a delay.
+        reload(self);
+        Ok(())
+    }
+
+    /// Turns every shortcut off, e.g. while a new one is being recorded;
+    /// `apply_shortcuts` brings them back.
+    pub fn suspend_shortcuts(&self) {
+        if let Some(app) = self.window.application() {
+            for detailed in app.list_action_descriptions() {
+                app.set_accels_for_action(&detailed, &[]);
+            }
+        }
+        self.file_view.set_shortcuts(&[]);
+    }
+
+    pub fn apply_shortcuts(self: &Rc<Self>) {
         let errors = shortcuts::apply(self);
         self.chrome
             .set_shortcut_hints(|action| shortcuts::label_for(&self.window, action));
@@ -552,30 +584,6 @@ impl AppState {
         });
     }
 
-    // ─── Settings panel ───
-
-    /// Swaps the content area between the file view and the settings panel.
-    pub fn set_settings_visible(self: &Rc<Self>, visible: bool) {
-        self.settings_visible.set(visible);
-        set_action_state(&self.window, "show-settings", visible.to_variant());
-
-        if visible {
-            let panel = settings::build_settings_panel(self);
-            let scroll = ScrolledWindow::builder()
-                .hscrollbar_policy(gtk4::PolicyType::Never)
-                .vexpand(true)
-                .hexpand(true)
-                .child(&panel)
-                .build();
-            self.content_scroll.set_child(Some(&scroll));
-            self.file_view.stop();
-            self.content_stack.set_visible_child_name("other");
-        } else {
-            self.content_scroll.set_child(Some(&self.content_box));
-            content::refresh_content(self);
-        }
-    }
-
     // ─── File operations ───
 
     pub fn open(&self, path: &Path) {
@@ -723,6 +731,8 @@ fn install_actions(state: &Rc<AppState>) {
         split.set_show_sidebar(!split.shows_sidebar());
     });
     simple("close-window", |s| s.window.close());
+    simple("show-settings", customize::present);
+    simple("command-palette", palette::present);
 
     // Custom actions from actions.toml, by index.
     {
@@ -753,7 +763,6 @@ fn install_actions(state: &Rc<AppState>) {
         state.config.borrow().show_hidden,
         |s, v| s.update_config(|cfg| cfg.show_hidden = v),
     );
-    toggle("show-settings", false, |s, v| s.set_settings_visible(v));
 
     // Radio-style: the view switcher buttons target "grid", "list", …
     let view_mode = gio::SimpleAction::new_stateful(

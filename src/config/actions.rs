@@ -82,6 +82,32 @@ impl TryFrom<String> for When {
     }
 }
 
+impl std::fmt::Display for When {
+    /// The `when = …` value, as written in actions.toml.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            When::Any => f.write_str("any"),
+            When::None => f.write_str("none"),
+            When::File => f.write_str("file"),
+            When::Folder => f.write_str("folder"),
+            When::Ext(exts) => write!(f, "ext:{}", exts.join(",")),
+        }
+    }
+}
+
+impl When {
+    /// Short description for the UI.
+    pub fn describe(&self) -> String {
+        match self {
+            When::Any => "Everywhere".into(),
+            When::None => "Folder background".into(),
+            When::File => "Files".into(),
+            When::Folder => "Folders".into(),
+            When::Ext(exts) => format!(".{}", exts.join(", .")),
+        }
+    }
+}
+
 /// What an action runs on.
 pub struct Target<'a> {
     pub dir: &'a Path,
@@ -225,6 +251,92 @@ impl Actions {
     }
 }
 
+/// Replaces `[[action]]` number `index` in an actions.toml document, or
+/// appends `action` when `index` is `None`. Keys that `action` doesn't set
+/// are removed; the table's comments stay.
+pub fn write_action(
+    doc: &mut toml_edit::DocumentMut,
+    index: Option<usize>,
+    action: &CustomAction,
+) -> Result<(), String> {
+    let appended = index.is_none().then(|| super::edit::new_table(doc));
+    let list = doc
+        .entry("action")
+        .or_insert_with(|| toml_edit::Item::ArrayOfTables(Default::default()))
+        .as_array_of_tables_mut()
+        .ok_or("“action” should be a list of [[action]] tables")?;
+    let table = match index {
+        Some(i) => list.get_mut(i).ok_or("that action no longer exists")?,
+        None => {
+            list.push(appended.unwrap_or_default());
+            list.get_mut(list.len() - 1).unwrap()
+        }
+    };
+    let mut set = |key: &str, value: Option<toml_edit::Value>| match value {
+        Some(v) => match table.get_mut(key).and_then(toml_edit::Item::as_value_mut) {
+            Some(old) => {
+                let decor = old.decor().clone();
+                *old = v;
+                *old.decor_mut() = decor;
+            }
+            None => {
+                table.insert(key, toml_edit::value(v));
+            }
+        },
+        None => {
+            table.remove(key);
+        }
+    };
+    set("name", Some(action.name.as_str().into()));
+    set("command", Some(action.command.as_str().into()));
+    set(
+        "when",
+        (action.when != When::Any).then(|| action.when.to_string().into()),
+    );
+    set("key", action.key.as_deref().map(Into::into));
+    set("shell", action.shell.then(|| true.into()));
+    set("icon", action.icon.as_deref().map(Into::into));
+    Ok(())
+}
+
+/// Removes `[[action]]` number `index` from an actions.toml document.
+pub fn remove_action(doc: &mut toml_edit::DocumentMut, index: usize) -> Result<(), String> {
+    let list = doc
+        .get_mut("action")
+        .and_then(toml_edit::Item::as_array_of_tables_mut)
+        .filter(|l| index < l.len())
+        .ok_or("that action no longer exists")?;
+    // Comments above the table (e.g. the starter file's examples) stay.
+    let prefix = list
+        .get(index)
+        .and_then(|t| t.decor().prefix())
+        .and_then(|p| p.as_str())
+        .filter(|p| p.contains('#'))
+        .map(str::to_owned);
+    list.remove(index);
+    if let Some(prefix) = prefix {
+        match list.get_mut(index) {
+            Some(next) => {
+                let old = next.decor().prefix().and_then(|p| p.as_str()).unwrap_or("");
+                let old = old.trim_start_matches('\n').to_string();
+                next.decor_mut()
+                    .set_prefix(format!("{}\n\n{}", prefix.trim_end(), old));
+            }
+            None => {
+                let old = doc.trailing().as_str().unwrap_or("").to_string();
+                doc.set_trailing(format!("{}{}", prefix, old));
+            }
+        }
+    }
+    let list = doc
+        .get("action")
+        .and_then(toml_edit::Item::as_array_of_tables);
+    if list.is_some_and(|l| l.is_empty()) {
+        doc.remove("action");
+    }
+    Ok(())
+}
+
 /// Writes a commented starter `actions.toml` on first run.
 pub fn seed(dir: &Path) -> std::io::Result<()> {
     let path = dir.join(ACTIONS_FILE);
@@ -302,6 +414,41 @@ mod tests {
             .map(|l| format!("{}\n", &l[2..]))
             .collect();
         assert_eq!(Actions::parse(&uncommented).unwrap().0.len(), 3);
+    }
+
+    #[test]
+    fn write_and_remove_round_trip() {
+        use crate::config::edit::edit_str;
+        let mut a = action("kitty --directory {dir}");
+        a.name = "Terminal".into();
+        a.when = When::None;
+        a.key = Some("<Ctrl><Alt>t".into());
+
+        let out = edit_str(STARTER_ACTIONS, |d| write_action(d, None, &a)).unwrap();
+        assert!(out.starts_with("# Diptych custom actions"), "{}", out);
+        assert!(out.ends_with("heic\"\n\n[[action]]\nname = \"Terminal\"\ncommand = \"kitty --directory {dir}\"\nwhen = \"none\"\nkey = \"<Ctrl><Alt>t\"\n"), "{}", out);
+        assert_eq!(Actions::parse(&out).unwrap().0, [a.clone()]);
+
+        let mut b = action("magick {file} {file}.png");
+        b.when = When::Ext(vec!["jpg".into(), "webp".into()]);
+        b.shell = true;
+        let out = edit_str(&out, |d| write_action(d, None, &b)).unwrap();
+        assert_eq!(Actions::parse(&out).unwrap().0, [a.clone(), b.clone()]);
+
+        // Editing drops keys that are no longer set.
+        a.key = None;
+        a.when = When::Any;
+        let out = edit_str(&out, |d| write_action(d, Some(0), &a)).unwrap();
+        assert_eq!(Actions::parse(&out).unwrap().0, [a.clone(), b.clone()]);
+        assert!(!out.contains("\nkey = "));
+
+        let out = edit_str(&out, |d| remove_action(d, 0)).unwrap();
+        assert_eq!(Actions::parse(&out).unwrap().0, [b]);
+        let out = edit_str(&out, |d| remove_action(d, 0)).unwrap();
+        assert_eq!(Actions::parse(&out).unwrap(), Actions::default());
+        // Back to the starter file: the documentation and examples survived.
+        assert_eq!(out.trim_end(), STARTER_ACTIONS.trim_end());
+        assert!(edit_str(&out, |d| remove_action(d, 0)).is_err());
     }
 
     #[test]
