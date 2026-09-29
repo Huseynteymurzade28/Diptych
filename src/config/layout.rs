@@ -99,6 +99,138 @@ pub enum HeaderItem {
     Menu,
 }
 
+// Names as written in layout.toml, and labels for the Customize dialog.
+
+impl Decorations {
+    pub const ALL: [Decorations; 4] = [Self::Auto, Self::Full, Self::Minimal, Self::None];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Full => "full",
+            Self::Minimal => "minimal",
+            Self::None => "none",
+        }
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Auto => "Automatic",
+            Self::Full => "Header bar with window buttons",
+            Self::Minimal => "Header bar only",
+            Self::None => "No header bar",
+        }
+    }
+}
+
+impl Side {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Right => "right",
+        }
+    }
+}
+
+impl InspectorField {
+    pub const ALL: [InspectorField; 7] = [
+        Self::Kind,
+        Self::Size,
+        Self::Modified,
+        Self::Created,
+        Self::Dimensions,
+        Self::Location,
+        Self::Permissions,
+    ];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Kind => "kind",
+            Self::Size => "size",
+            Self::Modified => "modified",
+            Self::Created => "created",
+            Self::Dimensions => "dimensions",
+            Self::Location => "location",
+            Self::Permissions => "permissions",
+        }
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Kind => "Kind",
+            Self::Size => "Size",
+            Self::Modified => "Modified",
+            Self::Created => "Created",
+            Self::Dimensions => "Image dimensions",
+            Self::Location => "Location",
+            Self::Permissions => "Permissions",
+        }
+    }
+}
+
+impl HeaderItem {
+    pub const ALL: [HeaderItem; 9] = [
+        Self::SidebarToggle,
+        Self::Back,
+        Self::Forward,
+        Self::Up,
+        Self::Path,
+        Self::New,
+        Self::ViewSwitcher,
+        Self::InspectorToggle,
+        Self::Menu,
+    ];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::SidebarToggle => "sidebar-toggle",
+            Self::Back => "back",
+            Self::Forward => "forward",
+            Self::Up => "up",
+            Self::Path => "path",
+            Self::New => "new",
+            Self::ViewSwitcher => "view-switcher",
+            Self::InspectorToggle => "inspector-toggle",
+            Self::Menu => "menu",
+        }
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::SidebarToggle => "Sidebar button",
+            Self::Back => "Back",
+            Self::Forward => "Forward",
+            Self::Up => "Parent folder",
+            Self::Path => "Path bar",
+            Self::New => "New folder or file",
+            Self::ViewSwitcher => "View switcher",
+            Self::InspectorToggle => "Inspector button",
+            Self::Menu => "Main menu",
+        }
+    }
+}
+
+impl HeaderLayout {
+    /// `start`, `center` and `end`, with their layout.toml keys.
+    pub fn slots(&self) -> [(&'static str, &Vec<HeaderItem>); 3] {
+        [
+            ("start", &self.start),
+            ("center", &self.center),
+            ("end", &self.end),
+        ]
+    }
+
+    /// Where `item` goes when it's turned back on: its default slot.
+    pub fn default_slot(item: HeaderItem) -> &'static str {
+        HeaderLayout::default()
+            .slots()
+            .into_iter()
+            .find(|(_, items)| items.contains(&item))
+            .map(|(name, _)| name)
+            .unwrap_or("end")
+    }
+}
+
 impl Default for WindowLayout {
     fn default() -> Self {
         Self {
@@ -280,6 +412,28 @@ mod tests {
         assert!(err("[header]\nstart = [\"bak\"]").contains("unknown variant"));
         assert!(err("[window]\ndecorations = \"fancy\"").contains("unknown variant"));
         assert!(err("[sidbar]\nvisible = false").contains("unknown field"));
+    }
+
+    #[test]
+    fn ids_match_the_file_format() {
+        let parse = |section: &str, key: &str, id: &str| {
+            LayoutConfig::parse(&format!("[{}]\n{} = {}", section, key, id))
+        };
+        for d in Decorations::ALL {
+            let cfg = parse("window", "decorations", &format!("{:?}", d.id())).unwrap();
+            assert_eq!(cfg.window.decorations, d);
+        }
+        for f in InspectorField::ALL {
+            let cfg = parse("inspector", "fields", &format!("[{:?}]", f.id())).unwrap();
+            assert_eq!(cfg.inspector.fields, [f]);
+        }
+        for h in HeaderItem::ALL {
+            let src = format!("[header]\nstart = [{:?}]\ncenter = []\nend = []", h.id());
+            let cfg = LayoutConfig::parse(&src).unwrap();
+            assert_eq!(cfg.header.start, [h]);
+        }
+        assert_eq!(HeaderLayout::default_slot(HeaderItem::Path), "center");
+        assert_eq!(HeaderLayout::default_slot(HeaderItem::Menu), "end");
     }
 
     #[test]

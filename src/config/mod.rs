@@ -2,6 +2,7 @@
 // Manages all user-configurable settings and their disk persistence.
 
 pub mod actions;
+pub mod edit;
 pub mod keybindings;
 pub mod layout;
 pub mod persistence;

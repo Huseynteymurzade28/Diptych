@@ -2,12 +2,14 @@
 
 Diptych's look is built from **tokens**. Colors, corner radius, spacing density and fonts come from a
 theme file, and the app generates its stylesheet from them. Edit the files below and save: changes
-apply immediately, without a restart.
+apply immediately, without a restart. **Customize → Appearance** (`Ctrl+,`) changes the most common
+tokens (preset, light-mode preset, accent, radius, density, fonts, text scale) in `theme.toml` for you,
+keeping your comments, and **Reset to Theme** drops your overrides.
 
 | File (in `~/.config/diptych/`) | Purpose |
 |---|---|
 | `theme.toml` | Picks a preset (`base`) and overrides any of its tokens. Created on first launch. |
-| `themes/<id>.toml` | Your own presets. Use them with `base = "<id>"`, and they appear in Settings → Theme. |
+| `themes/<id>.toml` | Your own presets. Use them with `base = "<id>"`, and they appear in Customize → Appearance → Theme. |
 | `user.css` | Plain GTK CSS, loaded last. Overrides anything. |
 
 If `theme.toml` has a mistake (a typo, a bad color), Diptych keeps the previous theme and prints the

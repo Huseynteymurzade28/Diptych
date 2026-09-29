@@ -4,13 +4,14 @@
 pub mod chrome;
 pub mod content;
 pub mod context_menu;
+pub mod customize;
 pub mod drag_source;
 pub mod file_view;
 pub mod graph_view;
 pub mod hamburger;
 pub mod inspector;
+pub mod palette;
 pub mod preview;
-pub mod settings;
 pub mod shortcuts;
 pub mod sidebar;
 pub mod snapshot;

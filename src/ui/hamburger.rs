@@ -31,7 +31,8 @@ pub fn build_hamburger_menu() -> MenuButton {
     menu.append_section(None, &view_section);
 
     let app_section = gio::Menu::new();
-    app_section.append(Some("Settings"), Some("win.show-settings"));
+    app_section.append(Some("Command Palette"), Some("win.command-palette"));
+    app_section.append(Some("Customize…"), Some("win.show-settings"));
     app_section.append(Some("About Diptych"), Some("win.about"));
     menu.append_section(None, &app_section);
 

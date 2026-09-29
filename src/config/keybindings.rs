@@ -66,7 +66,13 @@ pub const BINDABLE: &[Bindable] = {
         bind("view-mode::tree", "Tree view", &["<Ctrl>3"], Window),
         bind("view-mode::graph", "Graph view", &["<Ctrl>4"], Window),
         bind("cycle-view", "Next view mode", &[], Window),
-        bind("show-settings", "Settings", &["<Ctrl>comma"], Window),
+        bind("show-settings", "Customize", &["<Ctrl>comma"], Window),
+        bind(
+            "command-palette",
+            "Command palette",
+            &["<Ctrl><Shift>p", "<Ctrl>k"],
+            Window,
+        ),
         bind(
             "close-window",
             "Close window",
@@ -153,6 +159,31 @@ impl Keybindings {
     pub fn get(&self, name: &str) -> &[String] {
         self.keys.get(name).map(Vec::as_slice).unwrap_or(&[])
     }
+}
+
+/// Sets `name`'s shortcuts in a keybindings.toml document. Matching the
+/// defaults removes the entry, so the file only lists real changes.
+pub fn write_keys(
+    doc: &mut toml_edit::DocumentMut,
+    name: &str,
+    accels: &[String],
+) -> Result<(), String> {
+    let b = bindable(name).ok_or_else(|| format!("unknown action “{}”", name))?;
+    if accels
+        .iter()
+        .map(String::as_str)
+        .eq(b.defaults.iter().copied())
+    {
+        super::edit::remove(doc, Some("keys"), name);
+        // `remove` drops an emptied [keys]; keep the header for hand edits.
+        super::edit::table(doc, "keys")?;
+        return Ok(());
+    }
+    let value = match accels {
+        [one] => toml_edit::Value::from(one.as_str()),
+        many => super::edit::string_array(many),
+    };
+    super::edit::set(doc, Some("keys"), name, value)
 }
 
 /// Writes a starter `keybindings.toml` (every default, commented out) on
@@ -249,6 +280,31 @@ mod tests {
         assert!(err("[keys]\nback = \"\"").contains("empty shortcut"));
         assert!(err("[key]\nback = \"F1\"").contains("unknown field"));
         assert!(!err("[keys]\nback = 3").is_empty());
+    }
+
+    #[test]
+    fn write_keys_round_trips() {
+        let edit = |src: &str, name: &str, accels: &[&str]| {
+            let accels: Vec<String> = accels.iter().map(|s| s.to_string()).collect();
+            crate::config::edit::edit_str(src, |d| write_keys(d, name, &accels)).unwrap()
+        };
+        let src = starter_keybindings();
+        let out = edit(&src, "back", &["BackSpace"]);
+        let out = edit(&out, "view-mode::grid", &[]);
+        let out = edit(&out, "refresh", &["F5", "<Ctrl>F5"]);
+        let k = Keybindings::parse(&out).unwrap();
+        assert_eq!(k.get("back"), ["BackSpace"]);
+        assert!(k.get("view-mode::grid").is_empty());
+        assert_eq!(k.get("refresh"), ["F5", "<Ctrl>F5"]);
+        // The documentation comments survive.
+        assert!(out.contains("# Uncomment a line to change it."));
+
+        // Back to the defaults: the entries disappear again.
+        let out = edit(&out, "back", &["<Alt>Left", "Back"]);
+        let out = edit(&out, "view-mode::grid", &["<Ctrl>1"]);
+        let out = edit(&out, "refresh", &["F5", "<Ctrl>r"]);
+        assert_eq!(Keybindings::parse(&out).unwrap(), Keybindings::default());
+        assert!(!out.lines().any(|l| l.starts_with("back =")), "{}", out);
     }
 
     #[test]

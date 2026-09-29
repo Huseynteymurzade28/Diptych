@@ -2,7 +2,10 @@
 
 `~/.config/diptych/layout.toml` controls the window chrome and panes. It is created on first launch with
 every option documented. Changes apply **as soon as you save**. If the file has a mistake, the previous
-layout stays and the error is printed. Every key is optional.
+layout stays and a message at the bottom of the window says what's wrong. Every key is optional.
+
+**Customize → Layout** (`Ctrl+,`) edits the same file: panes, widths, inspector side and fields,
+title bar style, and which header bar items are shown. Item *order* is only in the file.
 
 ```
 ┌ header: [start]           [center]            [end] ┐

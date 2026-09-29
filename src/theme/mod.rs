@@ -6,7 +6,7 @@ mod color;
 mod css;
 mod model;
 
-pub use model::{Mode, Theme, ThemeFile};
+pub use model::{Density, Mode, Theme, ThemeFile};
 
 use gtk4::CssProvider;
 use model::{Presets, BUILTIN_PRESETS, DEFAULT_PRESET};
@@ -187,14 +187,63 @@ impl ThemeManager {
             .unwrap_or_else(|| DEFAULT_PRESET.to_string())
     }
 
-    /// Switches the preset by editing `base` in `theme.toml`, keeping the
-    /// user's comments and overrides intact.
-    pub fn set_base(&self, id: &str) -> Result<(), String> {
-        let path = self.theme_path();
-        let src = std::fs::read_to_string(&path).unwrap_or_default();
-        std::fs::write(&path, with_base(&src, id)?).map_err(|e| e.to_string())?;
+    /// The parsed `theme.toml` (empty if it can't be read).
+    pub fn file(&self) -> ThemeFile {
+        std::fs::read_to_string(self.theme_path())
+            .ok()
+            .and_then(|src| ThemeFile::parse(&src).ok())
+            .unwrap_or_default()
+    }
+
+    /// The theme in effect right now (preset + overrides).
+    pub fn current(&self) -> Result<Theme, String> {
+        self.load_theme(adw::StyleManager::default().is_dark())
+            .map(|(theme, _)| theme)
+    }
+
+    /// Edits `theme.toml` in place (comments and other keys stay) and
+    /// applies it. Nothing is written if the result wouldn't load.
+    pub fn edit(
+        &self,
+        change: impl FnOnce(&mut toml_edit::DocumentMut) -> Result<(), String>,
+    ) -> Result<(), String> {
+        let user_dir = self.dir.join(THEMES_DIR);
+        let check = |src: &str| {
+            let file = ThemeFile::parse(src)?;
+            Theme::resolve(
+                &file,
+                &Presets {
+                    user_dir: Some(&user_dir),
+                },
+            )
+        };
+        crate::config::edit::update(&self.theme_path(), check, change)?;
         self.reload();
         Ok(())
+    }
+
+    /// Drops every token override from `theme.toml`, keeping the preset
+    /// choice (`base`, `base-light`, `mode`).
+    pub fn reset_overrides(&self) -> Result<(), String> {
+        self.edit(|doc| {
+            for key in ["name", "dark", "colors", "files", "shape", "fonts"] {
+                crate::config::edit::remove_item(doc, key);
+            }
+            Ok(())
+        })
+    }
+
+    /// Path of `user.css`, created with a short header if missing.
+    pub fn user_css_path(&self) -> PathBuf {
+        let path = self.dir.join(USER_CSS);
+        if !path.exists() {
+            let _ = std::fs::write(
+                &path,
+                "/* Diptych user.css — plain GTK CSS, loaded after everything else.\n   \
+                 Class names are listed in docs/theming.md. Changes apply on save. */\n",
+            );
+        }
+        path
     }
 
     // ─── Hot reload ───
@@ -219,13 +268,6 @@ impl ThemeManager {
         );
         self.watches.borrow_mut().extend([own_files, presets]);
     }
-}
-
-/// `src` with its `base` key set to `id`; comments and layout are preserved.
-fn with_base(src: &str, id: &str) -> Result<String, String> {
-    let mut doc: toml_edit::DocumentMut = src.parse().map_err(|e| format!("{}", e))?;
-    doc["base"] = toml_edit::value(id);
-    Ok(doc.to_string())
 }
 
 fn preset_name(src: &str) -> Option<String> {
@@ -317,6 +359,10 @@ mod tests {
         assert_eq!(file.base.as_deref(), Some("nord"));
         assert_eq!(legacy_preset_id("Catppuccin"), "catppuccin-mocha");
         assert_eq!(legacy_preset_id("something else"), "catppuccin-mocha");
+    }
+
+    fn with_base(src: &str, id: &str) -> Result<String, String> {
+        crate::config::edit::edit_str(src, |d| crate::config::edit::set(d, None, "base", id))
     }
 
     #[test]
