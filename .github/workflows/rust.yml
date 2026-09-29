@@ -41,3 +41,48 @@ jobs:
 
       - name: Run tests
         run: cargo test --verbose
+
+  # Renders the window as GNOME, KDE and Hyprland users see it, under
+  # headless Weston, and fails on GTK criticals. The PNGs are uploaded.
+  screenshots:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libgraphene-1.0-dev \
+            libcairo2-dev \
+            libpango1.0-dev \
+            libgdk-pixbuf-2.0-dev \
+            weston \
+            dbus-daemon \
+            adwaita-icon-theme \
+            fonts-cantarell
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build
+
+      - name: Screenshots
+        # No GPU on the runner: GTK renders with cairo.
+        run: dbus-run-session -- env WESTON=1 GSK_RENDERER=cairo scripts/screenshots.sh
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/

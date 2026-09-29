@@ -124,6 +124,30 @@ base = "catppuccin-mocha"
 base-light = "cozy-latte"
 ```
 
+## Translucency and blur
+
+Give `window` (and optionally `sidebar`) an alpha channel to make the window translucent:
+
+```toml
+[colors]
+window = "#1e1e2ecc"     # 80 % opaque
+sidebar = "#18182540"    # a light tint on top of the window
+```
+
+The window color is painted once, behind everything. Panes that normally repeat it (the file view, the
+graph) become clear, so the alpha doesn't stack. The sidebar and header bar are drawn *on top of* the window
+color, so their alpha adds a tint: `#181825` at 25 % over a window at 80 % ends up about 85 % opaque. Menus,
+popovers and dialogs always use the window color without transparency, so they stay readable.
+
+Blur comes from the compositor:
+
+| Desktop | Blur |
+|---|---|
+| Hyprland | Blurs translucent windows by default (`decoration { blur { enabled = true } }`). Diptych's window class is `com.flear.diptych`, if you want a `windowrulev2` just for it. |
+| KDE Plasma | KWin's Blur effect only blurs windows that ask for it, and GTK4 apps can't. The window is translucent but not blurred. A third-party effect that forces blur by window class (e.g. *Better Blur*) with `com.flear.diptych` works. |
+| GNOME | Translucent, not blurred (Mutter has no blur). |
+| Sway, niri | Translucent. Blur depends on the compositor build (e.g. SwayFX). |
+
 ## `user.css`
 
 `user.css` is loaded with the highest priority, so any rule in it wins. Syntax errors are reported

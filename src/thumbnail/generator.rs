@@ -58,11 +58,7 @@ pub fn generate_image_thumbnail(source: &Path, out_path: &Path, width: u32, heig
     let reader = match ImageReader::open(source) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!(
-                "[thumb-gen] Cannot open image {}: {}",
-                source.display(),
-                e
-            );
+            eprintln!("[thumb-gen] Cannot open image {}: {}", source.display(), e);
             return false;
         }
     };
@@ -83,11 +79,7 @@ pub fn generate_image_thumbnail(source: &Path, out_path: &Path, width: u32, heig
     let img = match reader.decode() {
         Ok(img) => img,
         Err(e) => {
-            eprintln!(
-                "[thumb-gen] Failed to decode {}: {}",
-                source.display(),
-                e
-            );
+            eprintln!("[thumb-gen] Failed to decode {}: {}", source.display(), e);
             return false;
         }
     };
@@ -128,17 +120,20 @@ pub fn generate_video_thumbnail(source: &Path, out_path: &Path, width: u32, heig
 
     let status = Command::new("ffmpeg")
         .args([
-            "-y",                         // overwrite output
-            "-ss", "1",                   // seek to 1 second
+            "-y", // overwrite output
+            "-ss", "1", // seek to 1 second
             "-i",
         ])
-        .arg(source)                      // input file (may contain spaces)
+        .arg(source) // input file (may contain spaces)
         .args([
-            "-frames:v", "1",            // grab one frame
-            "-vf", &scale_filter,
-            "-q:v", "2",                 // high quality JPEG → we save as PNG below
+            "-frames:v",
+            "1", // grab one frame
+            "-vf",
+            &scale_filter,
+            "-q:v",
+            "2", // high quality JPEG → we save as PNG below
         ])
-        .arg(out_path)                    // output path (PNG by extension)
+        .arg(out_path) // output path (PNG by extension)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status();

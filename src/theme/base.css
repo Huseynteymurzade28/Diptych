@@ -10,6 +10,9 @@
      fs 13                 font size in px, scaled by fonts.scale
      font-ui-rule          the UI font rule, or nothing for the system font
      font-mono             monospace font family
+     window-inner          window, or transparent if the window is translucent
+                           (for panes, so a translucent window's alpha doesn't stack)
+     window-solid          window without transparency (menus, dialogs)
    Anything here can be overridden from ~/.config/diptych/user.css.
    ═══ */
 /* ── Base ── */
@@ -143,7 +146,7 @@ window {
 
 /* ── Inspector Panel ── */
 .inspector {
-    background-color: {{window}};
+    background-color: {{window-inner}};
 }
 .inspector-title {
     font-size: {{fs 18}};
@@ -209,7 +212,7 @@ entry:focus {
 
 /* ── Popover ── */
 popover {
-    background-color: {{window}};
+    background-color: {{window-solid}};
     color: {{text}};
     border: 1px solid {{border}};
     border-radius: {{radius 1}};
@@ -283,7 +286,7 @@ switch:checked {
 
 /* ── Context Menu ── */
 .context-menu {
-    background-color: {{window}};
+    background-color: {{window-solid}};
     border: 1px solid {{border}};
     border-radius: {{radius 1}};
 }
@@ -332,7 +335,7 @@ switch:checked {
 
 /* ── Graph View ── */
 .graph-view {
-    background-color: {{window}};
+    background-color: {{window-inner}};
 }
 
 /* ── Media Preview ── */
