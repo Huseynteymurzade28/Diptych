@@ -981,7 +981,7 @@ fn record_shortcut(ctx: &C, owner: Owner, allow_default: bool, done: impl Fn(Rec
 
 fn shortcut_section(name: &str) -> &'static str {
     match name {
-        "back" | "forward" | "go-up" | "go-home" | "refresh" => "Navigation",
+        "back" | "forward" | "go-up" | "go-home" | "refresh" | "open-terminal" => "Navigation",
         n if n.starts_with("view-mode")
             || matches!(
                 n,

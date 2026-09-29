@@ -48,6 +48,16 @@ Every shortcut can be changed in `~/.config/diptych/keybindings.toml`, and your 
 ("Open terminal here", "Convert to PNG", …) go in `~/.config/diptych/actions.toml`: they appear in the
 right-click menu and can have their own shortcut ([docs/shortcuts.md](docs/shortcuts.md)).
 
+## 📦 Install
+
+```sh
+scripts/install.sh             # to ~/.local: binary, launcher entry and icon
+scripts/install.sh --default   # also make Diptych your default file manager
+```
+
+With `--default`, folders from other apps and browsers' **Show in folder** open in Diptych. See
+[docs/desktops.md](docs/desktops.md#installing-and-making-diptych-the-default).
+
 ## 🛠️ Development Setup
 
 You can develop Diptych on **any operating system**.

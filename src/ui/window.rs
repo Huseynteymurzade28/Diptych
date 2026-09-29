@@ -9,17 +9,39 @@ use crate::ui::{context_menu, hamburger, inspector, sidebar};
 use gtk4::prelude::*;
 use gtk4::{Box, Orientation, ScrolledWindow};
 use std::path::PathBuf;
+use std::rc::Rc;
 
 // ═══════════════════════════════════════════════
 //  Main Window Assembly
 // ═══════════════════════════════════════════════
 
+thread_local! {
+    /// One theme for every window: its CSS providers are display-wide.
+    static THEME: std::cell::OnceCell<Rc<ThemeManager>> = const { std::cell::OnceCell::new() };
+}
+
+/// A new window at the home folder (`activate`).
 pub fn build(app: &adw::Application) {
+    open(app, None, vec![], None);
+}
+
+/// A new window showing `dir` (home if `None`) with `select` selected.
+/// `startup_id` is the activation token of whoever asked (D-Bus callers),
+/// so the compositor lets the window take focus.
+pub fn open(
+    app: &adw::Application,
+    dir: Option<PathBuf>,
+    select: Vec<PathBuf>,
+    startup_id: Option<&str>,
+) {
     let config = AppConfig::load();
     let config_dir = persistence::config_dir();
 
     // ── Theme (theme.toml + user.css, hot-reloaded) ──
-    let theme = ThemeManager::new(&config_dir, &config.theme);
+    let theme = THEME.with(|t| {
+        t.get_or_init(|| ThemeManager::new(&config_dir, &config.theme))
+            .clone()
+    });
 
     // ── Layout (layout.toml, hot-reloaded) ──
     if let Err(e) = layout::seed(&config_dir) {
@@ -56,7 +78,9 @@ pub fn build(app: &adw::Application) {
         Actions::default()
     });
 
-    let start_path = dirs::home_dir()
+    let start_path = dir
+        .filter(|d| d.is_dir())
+        .or_else(dirs::home_dir)
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_else(|| PathBuf::from("/"));
 
@@ -193,7 +217,11 @@ pub fn build(app: &adw::Application) {
         let _ = &watches;
     });
 
+    state.preselect(select);
     state.refresh();
+    if let Some(id) = startup_id.filter(|id| !id.is_empty()) {
+        window.set_startup_id(id);
+    }
     window.present();
     crate::ui::snapshot::schedule_if_requested(window.upcast_ref());
 }
