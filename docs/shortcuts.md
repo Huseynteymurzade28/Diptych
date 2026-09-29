@@ -28,6 +28,7 @@ actions use the same one, Diptych keeps the first and reports the other.
 | `go-home` | `<Alt>Home` | |
 | `refresh` | `F5`, `<Ctrl>r` | |
 | `new` | `<Ctrl><Shift>n` | New folder or file |
+| `open-terminal` | `<Shift>F4` | Terminal in this folder ([which one](desktops.md#open-terminal-here)) |
 | `toggle-hidden` | `<Ctrl>h` | Show hidden files |
 | `toggle-sidebar` | `F9` | |
 | `toggle-inspector` | `<Ctrl>i` | |

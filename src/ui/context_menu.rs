@@ -11,7 +11,8 @@ use std::rc::Rc;
 // ═══════════════════════════════════════════════
 //
 // Background context menu — right-click on empty space
-//   → "New Folder", "New File", your actions.toml actions, "Select All", "Refresh"
+//   → "New Folder", "New File", "Open Terminal Here", your actions.toml
+//     actions, "Select All", "Refresh"
 // (The item menu is a shared `gio::Menu` in `file_view.rs`.)
 //
 // All actual work is delegated to `AppState`.
@@ -27,6 +28,8 @@ pub fn attach_background_context_menu(target: &impl IsA<Widget>, state: &Rc<AppS
 
     let new_folder_btn = context_menu_button("folder-new-symbolic", "New Folder");
     let new_file_btn = context_menu_button("document-new-symbolic", "New File");
+    let terminal_btn = context_menu_button("utilities-terminal-symbolic", "Open Terminal Here");
+    terminal_btn.set_action_name(Some("win.open-terminal"));
     let select_all_btn = context_menu_button("edit-select-all-symbolic", "Select All");
     select_all_btn.set_action_name(Some("win.select-all"));
     let refresh_btn = context_menu_button("view-refresh-symbolic", "Refresh");
@@ -41,6 +44,7 @@ pub fn attach_background_context_menu(target: &impl IsA<Widget>, state: &Rc<AppS
     let menu_box = menu_box();
     menu_box.append(&new_folder_btn);
     menu_box.append(&new_file_btn);
+    menu_box.append(&terminal_btn);
     menu_box.append(&custom_box);
     menu_box.append(&menu_separator());
     menu_box.append(&select_all_btn);
@@ -64,7 +68,7 @@ pub fn attach_background_context_menu(target: &impl IsA<Widget>, state: &Rc<AppS
             });
         });
     }
-    for btn in [&select_all_btn, &refresh_btn] {
+    for btn in [&terminal_btn, &select_all_btn, &refresh_btn] {
         let popover_c = popover.clone();
         btn.connect_clicked(move |_| popover_c.popdown());
     }

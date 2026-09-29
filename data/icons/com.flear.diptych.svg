@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Folder back with its tab -->
+  <path d="M12 32a12 12 0 0 1 12-12h24a8 8 0 0 1 5.7 2.3L61 30h43a12 12 0 0 1 12 12v8H12z" fill="#8c6fd0"/>
+  <!-- Two hinged panels: the file list and the inspector -->
+  <rect x="12" y="42" width="50" height="70" rx="10" fill="#b4befe"/>
+  <rect x="66" y="42" width="50" height="70" rx="10" fill="#cba6f7"/>
+  <!-- Rows on the left panel -->
+  <rect x="22" y="56" width="30" height="6" rx="3" fill="#1e1e2e" opacity=".35"/>
+  <rect x="22" y="70" width="24" height="6" rx="3" fill="#1e1e2e" opacity=".35"/>
+  <rect x="22" y="84" width="28" height="6" rx="3" fill="#1e1e2e" opacity=".35"/>
+  <!-- Preview and details on the right panel -->
+  <rect x="76" y="54" width="30" height="24" rx="6" fill="#1e1e2e" opacity=".3"/>
+  <rect x="76" y="86" width="30" height="5" rx="2.5" fill="#1e1e2e" opacity=".3"/>
+  <rect x="76" y="97" width="20" height="5" rx="2.5" fill="#1e1e2e" opacity=".3"/>
+  <!-- Hinge -->
+  <circle cx="64" cy="58" r="3" fill="#1e1e2e"/>
+  <circle cx="64" cy="77" r="3" fill="#1e1e2e"/>
+  <circle cx="64" cy="96" r="3" fill="#1e1e2e"/>
+</svg>

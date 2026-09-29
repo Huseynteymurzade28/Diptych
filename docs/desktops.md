@@ -33,16 +33,51 @@ Tiles are often half or a quarter of the screen, so the layout adapts:
 | Light / dark | With `base-light` set in `theme.toml` (or `mode = "system"`), Diptych switches presets when the desktop's preference changes. It uses the freedesktop settings portal. The dark preference was verified on KDE Plasma through the portal, and the light switch was verified with `ADW_DEBUG_COLOR_SCHEME=prefer-light`. It should also work on GNOME and on Hyprland with `xdg-desktop-portal-gtk` or `-hyprland`, but that hasn't been tested yet. |
 | Icon theme | Your icon theme (Adwaita, Breeze, Papirus, Tela…). The inspector uses GIO's content-type icons, which fall back gracefully. |
 
+## Installing and making Diptych the default
+
+```sh
+scripts/install.sh             # build, install to ~/.local (binary, .desktop, icon)
+scripts/install.sh --default   # …and make it the default file manager
+scripts/install.sh --uninstall
+```
+
+`--prefix /usr/local` installs system-wide. `--default` does two things:
+
+* `xdg-mime default com.flear.diptych.desktop inode/directory`: "Open folder" from any app, `xdg-open ~/Downloads`
+  and desktop icons open Diptych.
+* It installs a D-Bus service for `org.freedesktop.FileManager1`. This is what browsers, download managers and
+  IDEs call for **Show in folder**. Diptych opens the folder with the file selected, even if it wasn't running.
+
+Diptych only answers `FileManager1` while it's the `inode/directory` default (or was started for it), so trying
+it next to Dolphin or Nautilus doesn't take over their "Show in folder". To switch back, run e.g.
+`xdg-mime default org.kde.dolphin.desktop inode/directory`.
+
+From a terminal, `diptych ~/Downloads` opens a folder, and `diptych ~/Downloads/file.pdf` opens its folder with the
+file selected.
+
+## Open Terminal Here
+
+`Shift+F4`, the empty-space menu, or the command palette opens a terminal in the current folder (or in the
+selected folder). The terminal is picked in this order:
+
+1. [`xdg-terminal-exec`](https://gitlab.freedesktop.org/terminal-wg/specifications), if installed
+2. `$TERMINAL` (it may include arguments, e.g. `kitty --single-instance`)
+3. the desktop's terminal: Ptyxis, Console or GNOME Terminal on GNOME; Konsole on KDE; xfce4-terminal on Xfce
+4. the first one found of kitty, foot, Alacritty, WezTerm, Ghostty, Konsole, Ptyxis, Console, GNOME Terminal,
+   xfce4-terminal, xterm
+
+On Hyprland and Sway, set `$TERMINAL` or install `xdg-terminal-exec` to pick yours. Verified on KDE Plasma, where
+Konsole opens with `--workdir`.
+
 ## Known issues
 
-* **Tela icon theme with GTK 4.22.** Tela's `list-add-symbolic` renders blank. This was seen on KDE
-  Plasma, and the root cause hasn't been identified yet (the SVG uses KDE's `ColorScheme-Text` styling
-  plus a `translate()` transform). Diptych's *New* button uses `folder-new-symbolic`, which renders fine.
+* **Tela icon theme with GTK 4.22.** Some Tela symbolic icons render blank, e.g. `list-add-symbolic` and
+  `value-increase-symbolic` (the −/+ buttons of number fields). The affected SVGs wrap their path in
+  `<g transform="translate(…)">`, and GTK 4.22 appears not to apply it. Diptych's *New* button uses
+  `folder-new-symbolic`, which renders fine. Details are in #16.
 * Missing icon names on stock Adwaita for some file kinds: #16.
 
 ## Planned (#17)
 
 * Translucent window and sidebar colors so Hyprland/KWin blur shows through
-* `.desktop` file, `inode/directory` MIME type (become the default file manager), `org.freedesktop.FileManager1`
-* Terminal action resolving `xdg-terminal-exec` → `$TERMINAL` → the desktop default
 * CI screenshots under headless Weston for each desktop

@@ -116,6 +116,11 @@ impl AppState {
         }
     }
 
+    /// Items to select once the folder has loaded (a new window's start).
+    pub fn preselect(&self, paths: Vec<PathBuf>) {
+        *self.selected.borrow_mut() = paths;
+    }
+
     /// Every selected item.
     pub fn selection(&self) -> Vec<PathBuf> {
         self.selected.borrow().clone()
@@ -544,6 +549,30 @@ impl AppState {
         });
     }
 
+    /// Opens the user's terminal in the selected folder, or the current one.
+    pub fn open_terminal(self: &Rc<Self>) {
+        let dir = match self.selected() {
+            Some(p) if p.is_dir() => p,
+            _ => self.current_path(),
+        };
+        let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+        let terminal = std::env::var("TERMINAL").ok();
+        let Some(argv) =
+            crate::integration::terminal::command(&desktop, terminal.as_deref(), &dir, |p| {
+                glib::find_program_in_path(p).is_some()
+            })
+        else {
+            self.toast("No terminal found: install one, or set $TERMINAL");
+            return;
+        };
+        let launcher = gio::SubprocessLauncher::new(gio::SubprocessFlags::NONE);
+        launcher.set_cwd(&dir);
+        let args: Vec<&std::ffi::OsStr> = argv.iter().map(|a| a.as_ref()).collect();
+        if let Err(e) = launcher.spawn(&args) {
+            self.toast(&format!("Couldn’t start {}: {}", argv[0], e.message()));
+        }
+    }
+
     // ─── Messages ───
 
     /// Shows a short message at the bottom of the window.
@@ -722,6 +751,7 @@ fn install_actions(state: &Rc<AppState>) {
         }
     });
     simple("new", |s| s.show_new());
+    simple("open-terminal", |s| s.open_terminal());
     simple("toggle-sidebar", |s| {
         let split = &s.chrome.sidebar_split;
         split.set_show_sidebar(!split.shows_sidebar());

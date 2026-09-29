@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Name=Diptych
+GenericName=File Manager
+Comment=Browse, select and inspect your files
+Exec=diptych %U
+Icon=com.flear.diptych
+Terminal=false
+StartupNotify=true
+Categories=GTK;System;FileTools;FileManager;Core;
+MimeType=inode/directory;
+Keywords=folder;files;explorer;browser;manager;
+Actions=new-window;
+
+[Desktop Action new-window]
+Name=New Window
+Exec=diptych

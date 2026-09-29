@@ -58,6 +58,12 @@ pub const BINDABLE: &[Bindable] = {
         bind("go-home", "Home folder", &["<Alt>Home"], Window),
         bind("refresh", "Refresh", &["F5", "<Ctrl>r"], Window),
         bind("new", "New folder or file", &["<Ctrl><Shift>n"], Window),
+        bind(
+            "open-terminal",
+            "Open terminal here",
+            &["<Shift>F4"],
+            Window,
+        ),
         bind("toggle-hidden", "Show hidden files", &["<Ctrl>h"], Window),
         bind("toggle-sidebar", "Toggle sidebar", &["F9"], Window),
         bind("toggle-inspector", "Toggle inspector", &["<Ctrl>i"], Window),
