@@ -1,3 +1,4 @@
+use super::color::Rgba;
 use super::model::{Theme, FILE_TOKENS};
 use std::fmt::Write;
 
@@ -31,19 +32,29 @@ fn adwaita_overrides(theme: &Theme) -> String {
             .expect("resolved theme is complete")
             .to_string()
     };
-    let pairs: [(&str, String); 21] = [
+    let pairs: [(&str, String); 26] = [
         ("window_bg_color", c("window")),
         ("window_fg_color", c("text")),
-        ("view_bg_color", c("window")),
+        // A translucent window is painted once, by the window itself;
+        // panes on top stay clear instead of stacking the alpha.
+        ("view_bg_color", window_inner(theme)),
         ("view_fg_color", c("text")),
         ("headerbar_bg_color", c("sidebar")),
         ("headerbar_fg_color", c("text")),
         ("headerbar_backdrop_color", c("sidebar")),
         ("sidebar_bg_color", c("sidebar")),
         ("sidebar_fg_color", c("text")),
-        ("popover_bg_color", c("window")),
+        // Unfocused windows use the backdrop color; without these the
+        // sidebar turns Adwaita grey whenever the window loses focus.
+        ("sidebar_backdrop_color", c("sidebar")),
+        ("secondary_sidebar_bg_color", c("sidebar")),
+        ("secondary_sidebar_fg_color", c("text")),
+        ("secondary_sidebar_backdrop_color", c("sidebar")),
+        ("headerbar_shade_color", c("border")),
+        // Menus and dialogs stay opaque so they're readable over anything.
+        ("popover_bg_color", window_solid(theme)),
         ("popover_fg_color", c("text")),
-        ("dialog_bg_color", c("window")),
+        ("dialog_bg_color", window_solid(theme)),
         ("dialog_fg_color", c("text")),
         ("card_bg_color", c("surface")),
         ("card_fg_color", c("text")),
@@ -65,6 +76,29 @@ fn adwaita_overrides(theme: &Theme) -> String {
     }
     css.push_str("}\n\n");
     css
+}
+
+fn window_color(theme: &Theme) -> Rgba {
+    theme.color("window").expect("resolved theme is complete")
+}
+
+/// `window`, or `transparent` when the window is translucent.
+fn window_inner(theme: &Theme) -> String {
+    let w = window_color(theme);
+    if w.a < 1.0 {
+        "transparent".into()
+    } else {
+        w.to_string()
+    }
+}
+
+/// `window` without its transparency.
+fn window_solid(theme: &Theme) -> String {
+    Rgba {
+        a: 1.0,
+        ..window_color(theme)
+    }
+    .to_string()
 }
 
 /// Expands `{{…}}` placeholders (see the header of `base.css`).
@@ -110,6 +144,8 @@ fn expand(placeholder: &str, theme: &Theme) -> Result<String, String> {
             })
         }
         "font-mono" => return Ok(theme.font_mono.clone()),
+        "window-inner" => return Ok(window_inner(theme)),
+        "window-solid" => return Ok(window_solid(theme)),
         _ => {}
     }
     let (name, alpha) = match placeholder.split_once('/') {
@@ -132,6 +168,22 @@ mod tests {
 
     fn theme(src: &str) -> Theme {
         Theme::resolve(&ThemeFile::parse(src).unwrap(), &Presets { user_dir: None }).unwrap()
+    }
+
+    #[test]
+    fn translucent_window_is_painted_once() {
+        let css = generate(&theme("[colors]\nwindow = \"#1e1e2ecc\"")).unwrap();
+        assert!(
+            css.contains("--window-bg-color: rgba(30, 30, 46, 0.8)"),
+            "{}",
+            css
+        );
+        assert!(css.contains("--view-bg-color: transparent"));
+        assert!(css.contains("--popover-bg-color: #1e1e2e;"));
+        assert!(css.contains(".graph-view {\n    background-color: transparent;"));
+        // Opaque windows are unchanged.
+        let css = generate(&theme("[colors]\nwindow = \"#1e1e2e\"")).unwrap();
+        assert!(css.contains("--view-bg-color: #1e1e2e;"));
     }
 
     #[test]

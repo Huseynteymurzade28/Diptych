@@ -69,6 +69,11 @@ selected folder). The terminal is picked in this order:
 On Hyprland and Sway, set `$TERMINAL` or install `xdg-terminal-exec` to pick yours. Verified on KDE Plasma, where
 Konsole opens with `--workdir`.
 
+## Translucency
+
+An alpha channel in the `window` color gives a translucent window, which Hyprland blurs. See
+[theming.md](theming.md#translucency-and-blur) for how each desktop handles blur.
+
 ## Known issues
 
 * **Tela icon theme with GTK 4.22.** Some Tela symbolic icons render blank, e.g. `list-add-symbolic` and
@@ -77,7 +82,12 @@ Konsole opens with `--workdir`.
   `folder-new-symbolic`, which renders fine. Details are in #16.
 * Missing icon names on stock Adwaita for some file kinds: #16.
 
-## Planned (#17)
+## Screenshots in CI
 
-* Translucent window and sidebar colors so Hyprland/KWin blur shows through
-* CI screenshots under headless Weston for each desktop
+Every push renders the window under headless Weston as GNOME, KDE and Hyprland users see it, plus a
+translucent and a light theme (`scripts/screenshots.sh`). The job fails if GTK logs a critical or a
+warning, and the PNGs are uploaded as the `screenshots` artifact. Run it locally with
+`scripts/screenshots.sh` (it uses your session) or `WESTON=1 scripts/screenshots.sh`.
+
+These are simulated desktops: only `XDG_CURRENT_DESKTOP` changes, so they check Diptych's own
+per-desktop behavior (window buttons, theme, layout), not the real compositors.
