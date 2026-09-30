@@ -720,3 +720,9 @@ switch:checked {
 .inspector-title {
     font-size: {{fs 17}};
 }
+
+/* ── Drop targets ── */
+.file-card:drop(active), .file-row:drop(active) {
+    background-color: {{accent/0.22}};
+    border-color: {{accent}};
+}

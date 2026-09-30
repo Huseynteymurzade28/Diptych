@@ -4,6 +4,7 @@
 mod entry;
 mod grouping;
 mod ops;
+pub mod transfer;
 
 pub use entry::{format_size, Entry};
 pub use ops::{

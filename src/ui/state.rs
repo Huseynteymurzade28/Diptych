@@ -236,7 +236,7 @@ impl AppState {
 
     /// Refreshes after a file operation. The file view follows the disk by
     /// itself (FileMonitor); other views are rebuilt.
-    fn after_file_op(self: &Rc<Self>) {
+    pub(crate) fn after_file_op(self: &Rc<Self>) {
         if self.file_view_active() && self.file_view.is_live() {
             self.selected.borrow_mut().retain(|p| p.exists());
             inspector::refresh(self);
@@ -287,7 +287,13 @@ impl AppState {
 
     fn update_selection_actions(&self) {
         let n = self.selected.borrow().len();
-        for name in ["open-selection", "trash-selection", "delete-selection"] {
+        for name in [
+            "open-selection",
+            "trash-selection",
+            "delete-selection",
+            "copy",
+            "cut",
+        ] {
             set_action_enabled(&self.window, name, n > 0);
         }
         set_action_enabled(&self.window, "rename-selection", n == 1);
@@ -616,6 +622,24 @@ impl AppState {
 
     // ─── Messages ───
 
+    /// One toast for a batch of failures: "Couldn’t delete “a”: … (+2 more)".
+    fn report_failures(&self, verb: &str, failures: &[String]) {
+        match failures {
+            [] => {}
+            [one] => {
+                self.toast(&format!("Couldn’t {} {}", verb, one));
+            }
+            [first, rest @ ..] => {
+                self.toast(&format!(
+                    "Couldn’t {} {} (+{} more)",
+                    verb,
+                    first,
+                    rest.len()
+                ));
+            }
+        }
+    }
+
     /// Shows a short message at the bottom of the window.
     pub fn toast(&self, message: &str) -> adw::Toast {
         eprintln!("{}", message);
@@ -658,7 +682,11 @@ impl AppState {
 
     pub fn open(&self, path: &Path) {
         if let Err(e) = open::that(path) {
-            eprintln!("Failed to open {}: {}", path.display(), e);
+            self.toast(&format!(
+                "Couldn’t open “{}”: {}",
+                path.file_name().unwrap_or_default().to_string_lossy(),
+                e
+            ));
         }
     }
 
@@ -704,12 +732,20 @@ impl AppState {
         if paths.is_empty() {
             return;
         }
-        for path in paths {
-            if let Err(e) = filesystem::move_to_trash(path) {
-                eprintln!("Failed to move {} to trash: {}", path.display(), e);
-            }
-        }
+        let failed: Vec<String> = paths
+            .iter()
+            .filter_map(|path| {
+                filesystem::move_to_trash(path).err().map(|e| {
+                    format!(
+                        "“{}”: {}",
+                        path.file_name().unwrap_or_default().to_string_lossy(),
+                        e.message()
+                    )
+                })
+            })
+            .collect();
         self.after_file_op();
+        self.report_failures("move to trash", &failed);
     }
 
     /// Asks for confirmation, then deletes `paths` permanently.
@@ -744,12 +780,20 @@ impl AppState {
             if choice != Ok(1) {
                 return;
             }
-            for path in &paths {
-                if let Err(e) = filesystem::delete_permanently(path) {
-                    eprintln!("Failed to delete {}: {}", path.display(), e);
-                }
-            }
+            let failed: Vec<String> = paths
+                .iter()
+                .filter_map(|path| {
+                    filesystem::delete_permanently(path).err().map(|e| {
+                        format!(
+                            "“{}”: {}",
+                            path.file_name().unwrap_or_default().to_string_lossy(),
+                            e
+                        )
+                    })
+                })
+                .collect();
             state.after_file_op();
+            state.report_failures("delete", &failed);
         });
     }
 }
@@ -808,6 +852,9 @@ fn install_actions(state: &Rc<AppState>) {
     simple("command-palette", palette::present);
 
     simple("bookmark", |s| s.bookmark());
+    simple("copy", |s| s.copy_selection(false));
+    simple("cut", |s| s.copy_selection(true));
+    simple("paste", |s| s.paste());
     {
         let s = state.clone();
         let action = gio::SimpleAction::new("remove-bookmark", Some(glib::VariantTy::STRING));
