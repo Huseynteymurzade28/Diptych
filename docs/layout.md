@@ -66,3 +66,16 @@ end = ["menu"]
 
 `open_with` in `config.toml` (also under Settings → Behavior) chooses between `DoubleClick`, where a
 click selects an item and a double click opens it, and `SingleClick`, where a click opens it.
+
+## Sorting, search and bookmarks
+
+The main menu's **Sort By** submenu sorts the grid and list by name, size, modified date or type,
+ascending or descending. Folders always come first. The choice is saved in `config.toml`
+(`sort_by`, `sort_descending`).
+
+`Ctrl+F`, or just typing while the file view has focus, filters the current folder by name.
+`Enter` opens the first match and `Escape` closes the search.
+
+Bookmarks live in the GTK bookmarks file (`~/.config/gtk-3.0/bookmarks`), so they are shared with
+Nautilus and the GTK file chooser. Add one with `Ctrl+D`, the item menu or the background menu;
+right-click a bookmark in the sidebar to remove it.

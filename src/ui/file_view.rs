@@ -13,9 +13,10 @@ use std::rc::{Rc, Weak};
 //  File View — virtualized grid / list of the current folder
 // ═══════════════════════════════════════════════
 //
-//   gio::ListStore<Entry>  →  SortListModel  →  MultiSelection  →  GridView / ListView
-//        ▲                     (folders first,     (click, Ctrl/Shift+click,
-//        │                      group sections)     rubber band, Ctrl+A)
+//   gio::ListStore<Entry> → FilterListModel → SortListModel → MultiSelection → GridView / ListView
+//        ▲                  (search, Ctrl+F)   (folders first,   (click, Ctrl/Shift+click,
+//        │                                      sort key,         rubber band, Ctrl+A)
+//        │                                      group sections)
 //   async enumeration in batches + gio::FileMonitor live updates
 //
 // Only the visible items have widgets: they are built on `bind` and
@@ -35,6 +36,13 @@ const ATTRIBUTES: &str = "standard::name,standard::type,standard::size,time::mod
 
 pub struct FileView {
     store: gio::ListStore,
+    /// Hides entries that don't match the search text.
+    filter: gtk4::CustomFilter,
+    filtered: gtk4::FilterListModel,
+    /// Lowercased search text; empty shows everything.
+    query: Rc<RefCell<String>>,
+    pub search_bar: gtk4::SearchBar,
+    search_entry: gtk4::SearchEntry,
     sorted: gtk4::SortListModel,
     selection: gtk4::MultiSelection,
     grid: gtk4::GridView,
@@ -76,9 +84,17 @@ pub struct FileView {
 impl FileView {
     pub fn new() -> Rc<FileView> {
         let store = gio::ListStore::new::<BoxedAnyObject>();
-        let sorter =
-            gtk4::CustomSorter::new(|a, b| Entry::display_cmp(&entry_ref(a), &entry_ref(b)).into());
-        let sorted = gtk4::SortListModel::new(Some(store.clone()), Some(sorter));
+        let query = Rc::new(RefCell::new(String::new()));
+        let filter = {
+            let query = query.clone();
+            gtk4::CustomFilter::new(move |obj| {
+                let query = query.borrow();
+                query.is_empty() || entry_ref(obj).name.to_lowercase().contains(query.as_str())
+            })
+        };
+        let filtered = gtk4::FilterListModel::new(Some(store.clone()), Some(filter.clone()));
+        // The real sorter is set by `show` from the config.
+        let sorted = gtk4::SortListModel::new(Some(filtered.clone()), None::<gtk4::Sorter>);
         let selection = gtk4::MultiSelection::new(Some(sorted.clone()));
 
         let grid = gtk4::GridView::builder()
@@ -124,9 +140,23 @@ impl FileView {
             .build();
         status_bar.append(&counts);
         status_bar.append(&selection_summary);
+        let search_entry = gtk4::SearchEntry::builder()
+            .placeholder_text("Search this folder")
+            .hexpand(true)
+            .max_width_chars(40)
+            .build();
+        let search_bar = gtk4::SearchBar::builder()
+            .child(&search_entry)
+            .show_close_button(true)
+            .build();
+        search_bar.connect_entry(&search_entry);
+        // Typing anywhere in the view starts a search.
+        search_bar.set_key_capture_widget(Some(&root));
+
         let widget = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Vertical)
             .build();
+        widget.append(&search_bar);
         widget.append(&root);
         widget.append(&status_bar);
         // Key events bubble up from the focused grid / list to here.
@@ -142,6 +172,11 @@ impl FileView {
 
         Rc::new(FileView {
             store,
+            filter,
+            filtered,
+            query,
+            search_bar,
+            search_entry,
             sorted,
             selection,
             grid,
@@ -233,6 +268,71 @@ impl FileView {
         }
 
         context_menu::attach_background_context_menu(&self.root, state);
+
+        {
+            let view = Rc::downgrade(self);
+            self.search_entry.connect_search_changed(move |entry| {
+                if let Some(view) = view.upgrade() {
+                    view.set_query(&entry.text());
+                }
+            });
+        }
+        {
+            // Closing the bar (Escape, the close button) clears the search.
+            let view = Rc::downgrade(self);
+            self.search_bar
+                .connect_search_mode_enabled_notify(move |bar| {
+                    let Some(view) = view.upgrade() else { return };
+                    if !bar.is_search_mode() {
+                        view.search_entry.set_text("");
+                        view.set_query("");
+                        view.grab_focus();
+                    }
+                });
+        }
+        {
+            // Enter in the search field opens the first match.
+            let (view, state) = (Rc::downgrade(self), Rc::downgrade(state));
+            self.search_entry.connect_activate(move |_| {
+                let (Some(view), Some(state)) = (view.upgrade(), state.upgrade()) else {
+                    return;
+                };
+                if let Some(entry) = entry_at(&view.sorted, 0) {
+                    state.activate(&entry);
+                }
+            });
+        }
+    }
+
+    // ─── Search ───
+
+    /// Shows the search bar (Ctrl+F), or focuses it if already shown.
+    pub fn start_search(&self) {
+        self.search_bar.set_search_mode(true);
+        self.search_entry.grab_focus();
+    }
+
+    fn set_query(&self, text: &str) {
+        let text = text.trim().to_lowercase();
+        let old = self.query.replace(text.clone());
+        if old == text {
+            return;
+        }
+        let change = if text.contains(old.as_str()) {
+            gtk4::FilterChange::MoreStrict
+        } else if old.contains(text.as_str()) {
+            gtk4::FilterChange::LessStrict
+        } else {
+            gtk4::FilterChange::Different
+        };
+        self.filter.changed(change);
+        self.update_status();
+    }
+
+    fn grab_focus(&self) {
+        if let Some(view) = self.scroll.child() {
+            view.grab_focus();
+        }
     }
 
     // ─── Showing & loading ───
@@ -241,6 +341,12 @@ impl FileView {
     /// item style, and (re)lists it. The selection is kept by path.
     pub fn show(self: &Rc<Self>, state: &Rc<AppState>) {
         let cfg = state.config();
+
+        let (by, descending) = (cfg.sort_by, cfg.sort_descending);
+        self.sorted
+            .set_sorter(Some(&gtk4::CustomSorter::new(move |a, b| {
+                Entry::sort_cmp(&entry_ref(a), &entry_ref(b), by, descending).into()
+            })));
 
         match cfg.grouping {
             GroupBy::None => {
@@ -277,6 +383,10 @@ impl FileView {
     }
 
     fn load(self: &Rc<Self>, state: &Rc<AppState>, dir: PathBuf, show_hidden: bool) {
+        if self.dir.borrow().as_ref() != Some(&dir) {
+            // A search is about one folder.
+            self.search_bar.set_search_mode(false);
+        }
         let generation = self.generation.get() + 1;
         self.generation.set(generation);
         *self.pending.borrow_mut() = state.selection();
@@ -377,6 +487,7 @@ impl FileView {
     fn update_status(&self) {
         let error = self.error.borrow().clone();
         let empty = !self.loading.get() && self.store.n_items() == 0;
+        let no_match = !self.loading.get() && !empty && self.filtered.n_items() == 0;
         if let Some(err) = &error {
             self.status
                 .set_icon_name(Some("action-unavailable-symbolic"));
@@ -388,8 +499,14 @@ impl FileView {
             self.status.set_title("This Folder Is Empty");
             self.status
                 .set_description(Some("Right-click to create a folder or a file."));
+        } else if no_match {
+            self.status.set_icon_name(Some("edit-find-symbolic"));
+            self.status.set_title("No Results");
+            self.status
+                .set_description(Some("No item in this folder matches your search."));
         }
-        self.status.set_visible(error.is_some() || empty);
+        self.status
+            .set_visible(error.is_some() || empty || no_match);
         self.update_counts();
     }
 
@@ -404,8 +521,17 @@ impl FileView {
         let folders = (0..n)
             .filter(|&i| self.store.item(i).is_some_and(|o| entry_ref(&o).is_dir))
             .count();
-        self.counts
-            .set_label(&count_summary(folders, n as usize - folders));
+        let mut counts = count_summary(folders, n as usize - folders);
+        if !self.query.borrow().is_empty() {
+            let shown = self.filtered.n_items();
+            counts = format!(
+                "{} match{} · {}",
+                shown,
+                if shown == 1 { "" } else { "es" },
+                counts
+            );
+        }
+        self.counts.set_label(&counts);
         self.update_selection_summary();
     }
 
@@ -820,6 +946,7 @@ fn item_menu_model(custom: &gio::Menu) -> gio::Menu {
     let open = gio::Menu::new();
     open.append(Some("Open"), Some("win.open-selection"));
     open.append(Some("Rename…"), Some("win.rename-selection"));
+    open.append(Some("Add to Bookmarks"), Some("win.bookmark"));
     menu.append_section(None, &open);
     menu.append_section(None, custom);
     let remove = gio::Menu::new();

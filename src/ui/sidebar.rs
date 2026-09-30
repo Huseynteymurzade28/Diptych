@@ -25,9 +25,15 @@ pub fn build_sidebar(places: &Box) -> gtk4::Widget {
         .upcast()
 }
 
-/// Standard places. Each row keeps its path as tooltip, which is also how
-/// `refresh_places` finds the current one.
+/// Fills the sidebar: standard places, bookmarks, devices. Runs again
+/// whenever the bookmarks file changes. Each row keeps its path as
+/// tooltip, which is also how `refresh_places` finds the current one.
 pub fn bind_places(state: &Rc<AppState>) {
+    let places_box = &state.places;
+    while let Some(child) = places_box.first_child() {
+        places_box.remove(&child);
+    }
+
     let places = [
         ("Home", "user-home-symbolic", dirs::home_dir()),
         ("Desktop", "user-desktop-symbolic", dirs::desktop_dir()),
@@ -45,7 +51,6 @@ pub fn bind_places(state: &Rc<AppState>) {
         ("Music", "folder-music-symbolic", dirs::audio_dir()),
         ("Videos", "folder-videos-symbolic", dirs::video_dir()),
     ];
-
     for (name, icon, path) in places {
         // XDG dirs that don't exist (or equal $HOME) would be duplicates.
         let Some(path) = path.filter(|p| p.is_dir()) else {
@@ -54,19 +59,70 @@ pub fn bind_places(state: &Rc<AppState>) {
         if name != "Home" && Some(&path) == dirs::home_dir().as_ref() {
             continue;
         }
-        let btn = widgets::create_place_row(name, icon);
-        btn.set_tooltip_text(Some(&path.to_string_lossy()));
-        let state_c = state.clone();
-        btn.connect_clicked(move |_| state_c.navigate_to(path.clone()));
-        state.places.append(&btn);
+        places_box.append(&place_row(state, name, icon, path));
     }
 
-    state.places.append(&section_title("Devices"));
-    let computer = widgets::create_place_row("Computer", "drive-harddisk-symbolic");
-    computer.set_tooltip_text(Some("/"));
-    let state_c = state.clone();
-    computer.connect_clicked(move |_| state_c.navigate_to(PathBuf::from("/")));
-    state.places.append(&computer);
+    let bookmarks: Vec<_> = crate::integration::bookmarks::load()
+        .into_iter()
+        .filter(|b| b.path.is_dir())
+        .collect();
+    if !bookmarks.is_empty() {
+        places_box.append(&section_title("Bookmarks"));
+    }
+    for bookmark in bookmarks {
+        let row = place_row(
+            state,
+            &bookmark.title(),
+            "folder-symbolic",
+            bookmark.path.clone(),
+        );
+        attach_bookmark_menu(&row, &bookmark.path);
+        places_box.append(&row);
+    }
+
+    places_box.append(&section_title("Devices"));
+    places_box.append(&place_row(
+        state,
+        "Computer",
+        "drive-harddisk-symbolic",
+        PathBuf::from("/"),
+    ));
+    refresh_places(state);
+}
+
+fn place_row(state: &Rc<AppState>, name: &str, icon: &str, path: PathBuf) -> Button {
+    let btn = widgets::create_place_row(name, icon);
+    btn.set_tooltip_text(Some(&path.to_string_lossy()));
+    let state = state.clone();
+    btn.connect_clicked(move |_| state.navigate_to(path.clone()));
+    btn
+}
+
+/// Right-click on a bookmark: remove it.
+fn attach_bookmark_menu(row: &Button, path: &Path) {
+    let menu = gio::Menu::new();
+    let item = gio::MenuItem::new(Some("Remove Bookmark"), None);
+    item.set_action_and_target_value(
+        Some("win.remove-bookmark"),
+        Some(&path.to_string_lossy().to_variant()),
+    );
+    menu.append_item(&item);
+    let popover = gtk4::PopoverMenu::from_model(Some(&menu));
+    popover.add_css_class("context-menu");
+    popover.set_has_arrow(false);
+    popover.set_parent(row);
+    // The row is rebuilt on every change; take the popover with it.
+    row.connect_destroy({
+        let popover = popover.clone();
+        move |_| popover.unparent()
+    });
+    let gesture = gtk4::GestureClick::builder().button(3).build();
+    gesture.connect_pressed(move |gesture, _, x, y| {
+        gesture.set_state(gtk4::EventSequenceState::Claimed);
+        popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
+        popover.popup();
+    });
+    row.add_controller(gesture);
 }
 
 fn section_title(title: &str) -> Label {

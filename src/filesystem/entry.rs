@@ -1,3 +1,4 @@
+use crate::config::SortBy;
 use chrono::Datelike;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -75,6 +76,30 @@ impl Entry {
         b.is_dir
             .cmp(&a.is_dir)
             .then_with(|| a.sort_key.cmp(&b.sort_key))
+    }
+
+    /// Order for the file views: folders first, then by `by` (ascending or
+    /// descending), ties broken by name. Folders have no meaningful size,
+    /// so they stay sorted by name when sorting by size.
+    pub fn sort_cmp(a: &Entry, b: &Entry, by: SortBy, descending: bool) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        if a.is_dir != b.is_dir {
+            return b.is_dir.cmp(&a.is_dir);
+        }
+        let by_name = || a.sort_key.cmp(&b.sort_key);
+        let key = match by {
+            SortBy::Name => Ordering::Equal,
+            SortBy::Size if a.is_dir => Ordering::Equal,
+            SortBy::Size => a.size.cmp(&b.size),
+            SortBy::Modified => a.modified.cmp(&b.modified),
+            SortBy::Type => a.extension.to_lowercase().cmp(&b.extension.to_lowercase()),
+        };
+        let order = key.then_with(by_name);
+        if descending {
+            order.reverse()
+        } else {
+            order
+        }
     }
 
     /// Human-readable file size string.
@@ -160,6 +185,35 @@ mod tests {
         entries.sort_by(Entry::display_cmp);
         let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, ["alpha", "Zeta", "A.txt", "b.txt"]);
+    }
+
+    #[test]
+    fn sorts_by_key_with_folders_first() {
+        let file = |name: &str, size: u64, age: u64| {
+            let modified = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1000 - age);
+            Entry::new(PathBuf::from("/x").join(name), false, size, Some(modified))
+        };
+        let mut entries = vec![
+            file("b.txt", 10, 1),
+            entry("Zeta", true),
+            file("a.rs", 300, 5),
+            entry("alpha", true),
+            file("c.md", 20, 3),
+        ];
+        let names = |v: &[Entry]| v.iter().map(|e| e.name.clone()).collect::<Vec<_>>();
+        let sort = |v: &mut Vec<Entry>, by, desc| v.sort_by(|a, b| Entry::sort_cmp(a, b, by, desc));
+
+        sort(&mut entries, SortBy::Size, false);
+        assert_eq!(names(&entries), ["alpha", "Zeta", "b.txt", "c.md", "a.rs"]);
+        sort(&mut entries, SortBy::Size, true);
+        // Descending flips the folders' order too, but they stay first.
+        assert_eq!(names(&entries), ["Zeta", "alpha", "a.rs", "c.md", "b.txt"]);
+        sort(&mut entries, SortBy::Modified, true);
+        assert_eq!(names(&entries)[2..], ["b.txt", "c.md", "a.rs"]);
+        sort(&mut entries, SortBy::Type, false);
+        assert_eq!(names(&entries)[2..], ["c.md", "a.rs", "b.txt"]);
+        sort(&mut entries, SortBy::Name, false);
+        assert_eq!(names(&entries), ["alpha", "Zeta", "a.rs", "b.txt", "c.md"]);
     }
 
     #[test]

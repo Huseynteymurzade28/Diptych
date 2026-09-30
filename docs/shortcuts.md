@@ -30,6 +30,10 @@ actions use the same one, Diptych keeps the first and reports the other.
 | `new` | `<Ctrl><Shift>n` | New folder or file |
 | `open-terminal` | `<Shift>F4` | Terminal in this folder ([which one](desktops.md#open-terminal-here)) |
 | `toggle-hidden` | `<Ctrl>h` | Show hidden files |
+| `search` | `<Ctrl>f` | Filter this folder by name; typing in the view also starts a search |
+| `bookmark` | `<Ctrl>d` | Bookmark the selected folder, or this one |
+| `sort-by::name` / `::size` / `::modified` / `::type` | — | Sort key (folders stay first) |
+| `sort-descending` | — | Reverse the sort order |
 | `toggle-sidebar` | `F9` | |
 | `toggle-inspector` | `<Ctrl>i` | |
 | `view-mode::grid` / `::list` / `::tree` / `::graph` | `<Ctrl>1` … `<Ctrl>4` | |

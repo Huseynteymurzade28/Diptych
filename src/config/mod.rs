@@ -13,4 +13,4 @@ pub mod watch;
 pub use actions::Actions;
 pub use keybindings::Keybindings;
 pub use layout::LayoutConfig;
-pub use types::{AppConfig, GroupBy, IconTheme, OpenWith, ViewMode};
+pub use types::{AppConfig, GroupBy, IconTheme, OpenWith, SortBy, ViewMode};
