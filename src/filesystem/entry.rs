@@ -1,3 +1,4 @@
+use chrono::Datelike;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -84,22 +85,45 @@ impl Entry {
         format_size(self.size)
     }
 
-    /// Human-readable modified date.
+    /// Short, friendly modified date in local time: "Today, 14:05",
+    /// "Yesterday, 09:12", "Sep 28", or "2025-03-01" for other years.
     pub fn modified_display(&self) -> String {
-        match self.modified {
-            Some(time) => {
-                let duration = time
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .unwrap_or_default();
-                let secs = duration.as_secs() as i64;
-                let dt = chrono::DateTime::from_timestamp(secs, 0);
-                match dt {
-                    Some(d) => d.format("%Y-%m-%d %H:%M").to_string(),
-                    None => "—".to_string(),
-                }
-            }
+        match self.modified_local() {
+            Some(dt) => friendly_date(dt, chrono::Local::now()),
             None => "—".to_string(),
         }
+    }
+
+    /// Full modified date and time in local time ("2026-09-30 21:17").
+    pub fn modified_full(&self) -> String {
+        match self.modified_local() {
+            Some(dt) => dt.format("%Y-%m-%d %H:%M").to_string(),
+            None => "—".to_string(),
+        }
+    }
+
+    fn modified_local(&self) -> Option<chrono::DateTime<chrono::Local>> {
+        self.modified.map(chrono::DateTime::<chrono::Local>::from)
+    }
+}
+
+/// `when` relative to `now`, for file lists.
+pub fn friendly_date<Tz: chrono::TimeZone>(
+    when: chrono::DateTime<Tz>,
+    now: chrono::DateTime<Tz>,
+) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let (day, today) = (when.date_naive(), now.date_naive());
+    if day == today {
+        when.format("Today, %H:%M").to_string()
+    } else if today.pred_opt() == Some(day) {
+        when.format("Yesterday, %H:%M").to_string()
+    } else if day.year_ce() == today.year_ce() && day < today {
+        when.format("%b %-d").to_string()
+    } else {
+        when.format("%Y-%m-%d").to_string()
     }
 }
 
@@ -136,6 +160,22 @@ mod tests {
         entries.sort_by(Entry::display_cmp);
         let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, ["alpha", "Zeta", "A.txt", "b.txt"]);
+    }
+
+    #[test]
+    fn friendly_dates() {
+        use chrono::{TimeZone, Utc};
+        let now = Utc.with_ymd_and_hms(2026, 9, 30, 18, 0, 0).unwrap();
+        let at = |y, m, d, h, min| Utc.with_ymd_and_hms(y, m, d, h, min, 0).unwrap();
+        assert_eq!(friendly_date(at(2026, 9, 30, 9, 5), now), "Today, 09:05");
+        assert_eq!(
+            friendly_date(at(2026, 9, 29, 23, 59), now),
+            "Yesterday, 23:59"
+        );
+        assert_eq!(friendly_date(at(2026, 9, 1, 12, 0), now), "Sep 1");
+        assert_eq!(friendly_date(at(2025, 12, 31, 12, 0), now), "2025-12-31");
+        // Clock skew: a date in the future gets the full form.
+        assert_eq!(friendly_date(at(2026, 10, 2, 12, 0), now), "2026-10-02");
     }
 
     #[test]

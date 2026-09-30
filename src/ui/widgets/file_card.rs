@@ -26,8 +26,9 @@ pub fn create_file_card(entry: &Entry, config: &AppConfig) -> Box {
         // Async thumbnail — shows placeholder first, swaps in the real image
         thumbnail::request_thumbnail(&entry.path, config.icon_size)
     } else {
-        // Only apply color tinting for the Colorful icon theme
-        let icon_classes = if config.icon_theme == IconTheme::Colorful {
+        // Folders always wear the folder color; files are tinted by kind
+        // with the Colorful icon theme only.
+        let icon_classes = if entry.is_dir || config.icon_theme == IconTheme::Colorful {
             vec![icon_css_class(entry).to_string()]
         } else {
             vec![]
@@ -59,26 +60,19 @@ pub fn create_file_card(entry: &Entry, config: &AppConfig) -> Box {
     card_box.append(&icon);
     card_box.append(&name_label);
 
-    // Metadata lines
+    // One quiet line: the size for files. Dates live in the list view and
+    // the inspector, so the grid stays calm.
     if config.show_file_size && !entry.is_dir {
         let size_label = Label::builder()
-            .label(&entry.size_display())
+            .label(entry.size_display())
             .css_classes(vec!["file-card-meta".to_string()])
             .halign(Align::Center)
             .build();
         card_box.append(&size_label);
     }
-    if config.show_modified_date {
-        let date_label = Label::builder()
-            .label(&entry.modified_display())
-            .css_classes(vec!["file-card-meta".to_string()])
-            .halign(Align::Center)
-            .build();
-        card_box.append(&date_label);
-    }
 
     // Card size adapts to icon_size
-    let card_width = config.icon_size.max(48) + 72;
+    let card_width = config.icon_size.max(48) + 64;
     card_box.add_css_class("file-card");
     card_box.set_halign(Align::Center);
     card_box.set_width_request(card_width);

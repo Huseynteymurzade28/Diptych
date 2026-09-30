@@ -28,11 +28,10 @@ window {
     border-right: 1px solid {{border}};
 }
 .sidebar-title {
-    font-size: {{fs 11}};
-    font-weight: 700;
-    letter-spacing: 1px;
-    color: {{text-secondary}};
-    padding: {{sp 6}} {{sp 14}} {{sp 4}} {{sp 14}};
+    font-size: {{fs 11.5}};
+    font-weight: 600;
+    color: {{text-muted}};
+    padding: {{sp 12}} {{sp 12}} {{sp 4}} {{sp 12}};
 }
 .place-btn {
     border-radius: {{radius 0.72}};
@@ -91,36 +90,34 @@ window {
     color: {{text}};
 }
 
-/* ── File Cards (Grid Mode) ── */
+/* ── File Cards (Grid Mode) ──
+   Flat tiles: no frame until hovered or selected, so a full folder
+   reads as calm rows of icons rather than a wall of boxes. */
 .file-card {
-    background-color: {{surface}};
+    background-color: transparent;
     border-radius: {{radius 1}};
-    padding: {{sp 14}} {{sp 10}} {{sp 10}} {{sp 10}};
-    border: 1px solid {{border}};
-    box-shadow: 0 2px 8px {{shadow}};
-    transition: all 180ms ease;
-    margin: {{sp 4}};
+    padding: {{sp 12}} {{sp 8}} {{sp 10}} {{sp 8}};
+    border: 1px solid transparent;
+    transition: background-color 160ms ease, border-color 160ms ease;
+    margin: {{sp 3}};
 }
 .file-card:hover {
-    background-color: {{hover}};
-    border-color: {{border-hover}};
-    box-shadow: 0 4px 16px {{shadow-hover}};
+    background-color: {{surface}};
 }
 .file-card-name {
-    font-size: {{fs 12}};
+    font-size: {{fs 12.5}};
     font-weight: 500;
     color: {{text}};
 }
 .file-card-meta {
-    font-size: {{fs 10}};
+    font-size: {{fs 10.5}};
     color: {{text-muted}};
-    margin-top: {{sp 2}};
 }
 
 /* ── File Row (List Mode) ── */
 .file-row {
     border-radius: {{radius 0.72}};
-    padding: {{sp 4}} {{sp 10}};
+    padding: {{sp 6}} {{sp 12}};
     margin: 1px {{sp 4}};
     background: transparent;
     color: {{text}};
@@ -593,12 +590,11 @@ switch:checked {
 
 /* ── Selection ── */
 .file-card.selected, .file-card.selected:hover {
-    background-color: {{accent/0.14}};
-    border-color: {{accent}};
+    background-color: {{accent/0.16}};
+    border-color: {{accent/0.45}};
 }
 .file-row.selected, .file-row.selected:hover {
-    background-color: {{accent/0.14}};
-    box-shadow: inset 3px 0 0 {{accent}};
+    background-color: {{accent/0.16}};
 }
 /* GridView / ListView wrap each item in a child / row that carries the
    selection state; the item widget inside draws it. */
@@ -617,13 +613,15 @@ switch:checked {
 }
 .file-grid > child:selected > .file-card,
 .file-grid > child:selected > .file-card:hover {
-    background-color: {{accent/0.14}};
-    border-color: {{accent}};
+    background-color: {{accent/0.16}};
+    border-color: {{accent/0.45}};
+}
+.file-grid > child:focus-visible > .file-card {
+    border-color: {{accent/0.7}};
 }
 .file-list > row:selected > .file-row,
 .file-list > row:selected > .file-row:hover {
-    background-color: {{accent/0.14}};
-    box-shadow: inset 3px 0 0 {{accent}};
+    background-color: {{accent/0.16}};
 }
 .file-grid > rubberband, .file-list > rubberband {
     background-color: {{accent/0.12}};
@@ -631,8 +629,14 @@ switch:checked {
     border-radius: {{radius 0.3}};
 }
 .place-btn.active {
-    background-color: {{accent/0.14}};
+    background-color: {{accent/0.16}};
     font-weight: 600;
+}
+.place-btn image {
+    color: {{text-secondary}};
+}
+.place-btn.active image {
+    color: {{accent}};
 }
 
 /* ── Path bar (header) ── */
@@ -673,4 +677,46 @@ switch:checked {
     background-color: {{window}};
     border-radius: {{radius 0.86}};
     padding: {{sp 12}} {{sp 14}};
+}
+
+/* ── Status bar (below the file view) ── */
+.status-bar {
+    padding: {{sp 5}} {{sp 16}};
+    border-top: 1px solid {{border}};
+    font-size: {{fs 11.5}};
+    color: {{text-muted}};
+}
+
+/* ── Empty / unreadable folder ── */
+.folder-status image {
+    color: {{accent}};
+    opacity: 0.55;
+}
+.folder-status .title {
+    color: {{text-secondary}};
+}
+.folder-status .description {
+    color: {{text-muted}};
+}
+
+/* ── Inspector actions ── */
+.inspector-action {
+    background-color: {{surface}};
+    color: {{text}};
+    border-radius: 99px;
+    padding: {{sp 6}} {{sp 12}};
+    font-weight: 500;
+    border: none;
+    box-shadow: none;
+    transition: background-color 150ms ease, color 150ms ease;
+}
+.inspector-action:hover {
+    background-color: {{hover}};
+}
+.inspector-action.danger:hover {
+    background-color: {{danger/0.16}};
+    color: {{danger}};
+}
+.inspector-title {
+    font-size: {{fs 17}};
 }

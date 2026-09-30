@@ -41,6 +41,7 @@ pub const DEFAULT_PRESET: &str = "catppuccin-mocha";
 
 /// Built-in presets, embedded at compile time: (id, TOML source).
 pub const BUILTIN_PRESETS: &[(&str, &str)] = &[
+    ("hearth", include_str!("presets/hearth.toml")),
     (
         "catppuccin-mocha",
         include_str!("presets/catppuccin-mocha.toml"),

@@ -1,7 +1,7 @@
 use crate::config::layout::InspectorField;
 use crate::filesystem::{self, Entry};
+use crate::ui::preview;
 use crate::ui::state::AppState;
-use crate::ui::{context_menu, preview};
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Button, Image, Label, Orientation};
 use std::path::Path;
@@ -89,7 +89,11 @@ pub fn refresh(state: &Rc<AppState>) {
                 .xalign(0.0)
                 .hexpand(true)
                 .selectable(true)
-                .ellipsize(gtk4::pango::EllipsizeMode::Middle)
+                // Wrap rather than ellipsize: in a narrow pane an ellipsized
+                // value shrinks to just "…" (#24).
+                .wrap(true)
+                .wrap_mode(gtk4::pango::WrapMode::WordChar)
+                .width_chars(8)
                 .build();
             rows.attach(&key, 0, row, 1, 1);
             rows.attach(&val, 1, row, 1, 1);
@@ -101,13 +105,12 @@ pub fn refresh(state: &Rc<AppState>) {
     }
 
     if is_selection {
-        pane.append(&actions(state, &entry));
+        pane.append(&actions());
     } else {
         let hint = Label::builder()
             .label(match state.config.borrow().open_with {
                 crate::config::OpenWith::DoubleClick => {
-                    "Click an item to see its details, Ctrl/Shift-click to select several. \
-                     Double-click to open."
+                    "Select an item to see its details here. Double-click to open it."
                 }
                 crate::config::OpenWith::SingleClick => {
                     "Right-click an item for its actions. Click to open it."
@@ -171,33 +174,29 @@ fn multi_selection(pane: &Box, paths: &[std::path::PathBuf]) {
             .build(),
     );
 
-    let column = Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(8)
-        .build();
-    let open = Button::builder()
-        .label("Open All")
-        .action_name("win.open-selection")
-        .css_classes(["btn-primary"])
-        .build();
     let row = Box::builder().spacing(8).homogeneous(true).build();
-    let trash = Button::builder()
-        .label("Move to Trash")
-        .action_name("win.trash-selection")
-        .css_classes(["btn-secondary", "context-menu-danger"])
-        .build();
-    let delete = Button::builder()
-        .label("Delete…")
-        .action_name("win.delete-selection")
-        .css_classes(["btn-secondary", "context-menu-danger"])
-        .build();
+    let trash = action_button("user-trash-symbolic", "Trash", "win.trash-selection");
+    trash.set_tooltip_text(Some("Move to Trash"));
     row.append(&trash);
-    row.append(&delete);
-    if files > 0 {
-        column.append(&open);
-    }
-    column.append(&row);
-    pane.append(&column);
+    row.append(&action_button(
+        "edit-delete-symbolic",
+        "Delete…",
+        "win.delete-selection",
+    ));
+    pane.append(&row);
+}
+
+/// A quiet pill button with an icon and a label, bound to a `win.*` action.
+fn action_button(icon: &str, label: &str, action: &str) -> Button {
+    let content = adw::ButtonContent::builder()
+        .icon_name(icon)
+        .label(label)
+        .build();
+    Button::builder()
+        .child(&content)
+        .action_name(action)
+        .css_classes(["inspector-action"])
+        .build()
 }
 
 fn display_name(entry: &Entry) -> String {
@@ -258,7 +257,7 @@ fn field_value(
             ))
         }
         InspectorField::Size => Some(("Size", entry.size_display())),
-        InspectorField::Modified => Some(("Modified", entry.modified_display())),
+        InspectorField::Modified => Some(("Modified", entry.modified_full())),
         InspectorField::Created => {
             let created = meta?.created().ok()?;
             let dt: chrono::DateTime<chrono::Local> = created.into();
@@ -283,57 +282,20 @@ fn field_value(
     }
 }
 
-fn actions(state: &Rc<AppState>, entry: &Entry) -> Box {
-    let column = Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(8)
-        .build();
-
-    let open = Button::builder()
-        .label(if entry.is_dir { "Open Folder" } else { "Open" })
-        .css_classes(["btn-primary"])
-        .build();
-    {
-        let (state, entry) = (state.clone(), entry.clone());
-        open.connect_clicked(move |_| state.activate(&entry));
-    }
-
+/// Rename and trash for the selected item. Opening is a double-click (or
+/// Enter) away, so it gets no button here.
+fn actions() -> Box {
     let row = Box::builder().spacing(8).homogeneous(true).build();
-    let rename = Button::builder()
-        .label("Rename")
-        .css_classes(["btn-secondary"])
-        .build();
-    {
-        let (state, path) = (state.clone(), entry.path.clone());
-        rename.connect_clicked(move |btn| {
-            let old = path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default();
-            let (state, path) = (state.clone(), path.clone());
-            context_menu::show_name_dialog(
-                btn.upcast_ref(),
-                "Rename",
-                "Rename",
-                &old,
-                move |name| state.rename(&path, name),
-            );
-        });
-    }
-    let trash = Button::builder()
-        .label("Move to Trash")
-        .css_classes(["btn-secondary", "context-menu-danger"])
-        .build();
-    {
-        let (state, path) = (state.clone(), entry.path.clone());
-        trash.connect_clicked(move |_| state.trash(&path));
-    }
-    row.append(&rename);
+    row.append(&action_button(
+        "document-edit-symbolic",
+        "Rename",
+        "win.rename-selection",
+    ));
+    let trash = action_button("user-trash-symbolic", "Trash", "win.trash-selection");
+    trash.set_tooltip_text(Some("Move to Trash"));
+    trash.add_css_class("danger");
     row.append(&trash);
-
-    column.append(&open);
-    column.append(&row);
-    column
+    row
 }
 
 // ─── Formatting helpers ───

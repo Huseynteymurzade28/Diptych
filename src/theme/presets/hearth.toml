@@ -1,0 +1,50 @@
+# Built-in Diptych theme. Copy to ~/.config/diptych/themes/<name>.toml to make your own.
+# Warm, low-contrast dark theme: the default for new installs.
+name = "Hearth"
+dark = true
+
+[colors]
+window = "#1f1b18"
+sidebar = "#191613"
+surface = "#2b2521"
+hover = "#3a322c"
+text = "#efe4d8"
+text-secondary = "#c2b2a3"
+text-muted = "#8a7b6e"
+text-subtle = "#d9cabb"
+accent = "#e8a36c"
+accent-hover = "#f0b98b"
+accent-text = "@window"
+border = "rgba(239, 228, 216, 0.06)"
+border-hover = "rgba(232, 163, 108, 0.30)"
+shadow = "rgba(0, 0, 0, 0.22)"
+shadow-hover = "rgba(0, 0, 0, 0.34)"
+danger = "#e0787a"
+
+[files]
+folder = "@accent"
+rust = "#e8906c"
+python = "#8fb3d9"
+js = "#e6c07b"
+c = "#7fb8b0"
+java = "#d98a8a"
+go = "#9cc48b"
+script = "#c4a0d6"
+image = "#9cc48b"
+audio = "#c4a0d6"
+video = "#d98a8a"
+archive = "#e6c07b"
+pdf = "#e08a8a"
+web = "#7fc4b8"
+text = "@text-muted"
+config = "#7fc4b8"
+default = "@text-secondary"
+
+[shape]
+radius = 16
+density = "comfortable"
+
+[fonts]
+ui = "system"        # desktop font (gtk-font-name); or e.g. "Inter, sans-serif"
+mono = "JetBrains Mono, monospace"
+scale = 1.0

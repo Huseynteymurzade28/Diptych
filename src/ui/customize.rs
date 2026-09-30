@@ -769,7 +769,7 @@ fn behavior_page(ctx: &C) -> adw::PreferencesPage {
     ));
     group.add(&toggle(
         "Show Modified Date",
-        None,
+        Some("In list view"),
         cfg.show_modified_date,
         |c, v| c.show_modified_date = v,
     ));
