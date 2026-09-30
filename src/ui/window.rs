@@ -213,8 +213,23 @@ pub fn open(
         watch(keybindings::KEYBINDINGS_FILE, |s| s.reload_keybindings()),
         watch(actions::ACTIONS_FILE, |s| s.reload_actions()),
     ];
+    // Bookmarks added in Nautilus or the file chooser show up here too.
+    let bookmarks = {
+        let weak = std::rc::Rc::downgrade(&state);
+        let file = crate::integration::bookmarks::file();
+        let dir = file.parent().map(|d| d.to_path_buf()).unwrap_or_default();
+        crate::config::watch::watch(
+            &[dir],
+            move |name| Some(name.as_os_str()) == file.file_name(),
+            move || {
+                if let Some(state) = weak.upgrade() {
+                    sidebar::bind_places(&state);
+                }
+            },
+        )
+    };
     window.connect_destroy(move |_| {
-        let _ = &watches;
+        let _ = (&watches, &bookmarks);
     });
 
     state.preselect(select);

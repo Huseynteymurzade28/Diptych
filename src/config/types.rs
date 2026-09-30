@@ -43,6 +43,38 @@ pub enum GroupBy {
     Name,
 }
 
+// ─── Sorting ───
+
+/// Sort key for the grid and list views. Folders always come first.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+pub enum SortBy {
+    #[default]
+    Name,
+    Size,
+    Modified,
+    Type,
+}
+
+impl SortBy {
+    pub const ALL: [(SortBy, &'static str, &'static str); 4] = [
+        (SortBy::Name, "name", "Name"),
+        (SortBy::Size, "size", "Size"),
+        (SortBy::Modified, "modified", "Modified"),
+        (SortBy::Type, "type", "Type"),
+    ];
+
+    pub fn id(self) -> &'static str {
+        Self::ALL.iter().find(|(s, _, _)| *s == self).unwrap().1
+    }
+
+    pub fn from_id(id: &str) -> Option<SortBy> {
+        Self::ALL
+            .iter()
+            .find(|(_, i, _)| *i == id)
+            .map(|(s, _, _)| *s)
+    }
+}
+
 // ─── View Mode ───
 
 /// Switches between grid (card), list (row), graph (node), and tree (hierarchy) layouts.
@@ -82,8 +114,10 @@ pub struct AppConfig {
     pub show_file_size: bool,
     pub show_modified_date: bool,
 
-    // Grouping
+    // Grouping & sorting
     pub grouping: GroupBy,
+    pub sort_by: SortBy,
+    pub sort_descending: bool,
 
     // Behavior
     pub open_with: OpenWith,
@@ -104,6 +138,8 @@ impl Default for AppConfig {
             show_file_size: true,
             show_modified_date: true,
             grouping: GroupBy::None,
+            sort_by: SortBy::Name,
+            sort_descending: false,
             open_with: OpenWith::DoubleClick,
             window_width: 1100,
             window_height: 700,

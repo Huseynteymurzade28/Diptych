@@ -1,5 +1,5 @@
 use crate::config::actions::{CustomAction, Target};
-use crate::config::{Actions, AppConfig, Keybindings, LayoutConfig, OpenWith, ViewMode};
+use crate::config::{Actions, AppConfig, Keybindings, LayoutConfig, OpenWith, SortBy, ViewMode};
 use crate::filesystem::{self, Entry};
 use crate::theme::ThemeManager;
 use crate::ui::chrome::Chrome;
@@ -217,6 +217,12 @@ impl AppState {
 
         let cfg = self.config.borrow();
         set_action_state(&self.window, "toggle-hidden", cfg.show_hidden.to_variant());
+        set_action_state(&self.window, "sort-by", cfg.sort_by.id().to_variant());
+        set_action_state(
+            &self.window,
+            "sort-descending",
+            cfg.sort_descending.to_variant(),
+        );
         set_action_state(
             &self.window,
             "view-mode",
@@ -573,6 +579,41 @@ impl AppState {
         }
     }
 
+    // ─── Bookmarks ───
+
+    /// Bookmarks the selected folder, or the current one.
+    pub fn bookmark(self: &Rc<Self>) {
+        let path = match self.selected() {
+            Some(p) if p.is_dir() => p,
+            _ => self.current_path(),
+        };
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.display().to_string());
+        match crate::integration::bookmarks::add(&path) {
+            Ok(true) => {
+                sidebar::bind_places(self);
+                self.toast(&format!("Bookmarked “{}”", name));
+            }
+            Ok(false) => {
+                self.toast(&format!("“{}” is already bookmarked", name));
+            }
+            Err(e) => {
+                self.toast(&format!("Couldn’t add the bookmark: {}", e));
+            }
+        }
+    }
+
+    pub fn remove_bookmark(self: &Rc<Self>, path: &Path) {
+        match crate::integration::bookmarks::remove(path) {
+            Ok(()) => sidebar::bind_places(self),
+            Err(e) => {
+                self.toast(&format!("Couldn’t remove the bookmark: {}", e));
+            }
+        }
+    }
+
     // ─── Messages ───
 
     /// Shows a short message at the bottom of the window.
@@ -758,7 +799,25 @@ fn install_actions(state: &Rc<AppState>) {
     });
     simple("close-window", |s| s.window.close());
     simple("show-settings", customize::present);
+    simple("search", |s| {
+        if !s.file_view_active() {
+            s.set_view_mode(ViewMode::List);
+        }
+        s.file_view.start_search();
+    });
     simple("command-palette", palette::present);
+
+    simple("bookmark", |s| s.bookmark());
+    {
+        let s = state.clone();
+        let action = gio::SimpleAction::new("remove-bookmark", Some(glib::VariantTy::STRING));
+        action.connect_activate(move |_, param| {
+            if let Some(path) = param.and_then(|p| p.get::<String>()) {
+                s.remove_bookmark(Path::new(&path));
+            }
+        });
+        state.window.add_action(&action);
+    }
 
     // Custom actions from actions.toml, by index.
     {
@@ -789,6 +848,30 @@ fn install_actions(state: &Rc<AppState>) {
         state.config.borrow().show_hidden,
         |s, v| s.update_config(|cfg| cfg.show_hidden = v),
     );
+    toggle(
+        "sort-descending",
+        state.config.borrow().sort_descending,
+        |s, v| s.update_config(|cfg| cfg.sort_descending = v),
+    );
+
+    // Radio-style sort key: "name", "size", "modified", "type".
+    let sort_by = gio::SimpleAction::new_stateful(
+        "sort-by",
+        Some(glib::VariantTy::STRING),
+        &state.config.borrow().sort_by.id().to_variant(),
+    );
+    {
+        let s = state.clone();
+        sort_by.connect_change_state(move |_, value| {
+            if let Some(by) = value
+                .and_then(|v| v.get::<String>())
+                .and_then(|id| SortBy::from_id(&id))
+            {
+                s.update_config(|cfg| cfg.sort_by = by);
+            }
+        });
+    }
+    state.window.add_action(&sort_by);
 
     // Radio-style: the view switcher buttons target "grid", "list", …
     let view_mode = gio::SimpleAction::new_stateful(

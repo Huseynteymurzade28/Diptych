@@ -25,7 +25,19 @@ pub fn build_hamburger_menu() -> MenuButton {
     }
     menu.append_section(Some("View"), &modes);
 
+    let sort = gio::Menu::new();
+    for (_, id, label) in crate::config::SortBy::ALL {
+        let item = gio::MenuItem::new(Some(label), None);
+        item.set_action_and_target_value(Some("win.sort-by"), Some(&id.to_variant()));
+        sort.append_item(&item);
+    }
+    sort.append(Some("Descending"), Some("win.sort-descending"));
+    let sort_menu = gio::Menu::new();
+    sort_menu.append_submenu(Some("Sort By"), &sort);
+    menu.append_section(None, &sort_menu);
+
     let view_section = gio::Menu::new();
+    view_section.append(Some("Search"), Some("win.search"));
     view_section.append(Some("Show Hidden Files"), Some("win.toggle-hidden"));
     view_section.append(Some("Refresh"), Some("win.refresh"));
     menu.append_section(None, &view_section);

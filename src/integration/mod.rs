@@ -2,6 +2,7 @@
 // Opening folders from other apps (command line, `inode/directory`,
 // org.freedesktop.FileManager1) and launching the user's terminal.
 
+pub mod bookmarks;
 pub mod file_manager1;
 pub mod terminal;
 
