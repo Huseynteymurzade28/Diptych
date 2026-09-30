@@ -3,7 +3,7 @@ use crate::filesystem;
 use crate::thumbnail;
 use crate::ui::drag_source;
 use crate::ui::state::AppState;
-use crate::ui::widgets::icon::{icon_css_class, icon_for_entry_themed};
+use crate::ui::widgets::icon::{icon_css_class, icon_for_entry_themed, system_icon};
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Button, Image, Label, Orientation};
 use std::cell::RefCell;
@@ -180,7 +180,7 @@ fn render_tree(
         let has_thumb = !entry.is_dir && thumbnail::supports_thumbnail(&ext);
         let icon_sz = 22;
 
-        let is_colorful = cfg.icon_theme == IconTheme::Colorful;
+        let is_colorful = matches!(cfg.icon_theme, IconTheme::Colorful | IconTheme::System);
 
         // Colorful → use real themed icons (same as Grid/List)
         // Minimal/Outline → symbolic icons with CSS color tinting
@@ -204,15 +204,21 @@ fn render_tree(
                 // Remove -gtk-icon-style: symbolic override for colorful
                 classes.push("tree-icon-colorful".to_string());
             }
-            Image::builder()
-                .gicon(&gio::ThemedIcon::from_names(&[
+            let gicon: gio::Icon = if cfg.icon_theme == IconTheme::System {
+                system_icon(entry)
+            } else {
+                gio::ThemedIcon::from_names(&[
                     entry_icon_name,
                     if entry.is_dir {
                         "folder-symbolic"
                     } else {
                         "text-x-generic-symbolic"
                     },
-                ]))
+                ])
+                .upcast()
+            };
+            Image::builder()
+                .gicon(&gicon)
                 .pixel_size(icon_sz)
                 .css_classes(classes)
                 .build()

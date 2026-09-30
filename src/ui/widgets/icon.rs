@@ -1,11 +1,13 @@
 use crate::config::IconTheme;
 use crate::filesystem::Entry;
+use gio::prelude::*;
 
 // ═══════════════════════════════════════════════
 //  Dynamic Icon System
 // ═══════════════════════════════════════════════
 //
 // Supports multiple switchable icon themes:
+//   - System    : the desktop icon theme in full color (default)
 //   - Minimal   : clean symbolic icons (GTK standard)
 //   - Colorful  : category-colored semantic icons
 //   - Outline   : thin outline-style symbolic icons
@@ -23,7 +25,7 @@ pub fn icon_for_entry_themed(entry: &Entry, theme: &IconTheme) -> &'static str {
     }
     match theme {
         IconTheme::Minimal => minimal_icon(&entry.extension),
-        IconTheme::Colorful => colorful_icon(&entry.extension),
+        IconTheme::System | IconTheme::Colorful => colorful_icon(&entry.extension),
         IconTheme::Outline => outline_icon(&entry.extension),
     }
 }
@@ -32,9 +34,57 @@ pub fn icon_for_entry_themed(entry: &Entry, theme: &IconTheme) -> &'static str {
 /// `application-x-shellscript` exist in Papirus, Tela or Breeze but not in
 /// Adwaita, so a generic document icon stands in for them rather than
 /// GTK's "missing image" placeholder (#16).
-pub fn gicon_for_entry(entry: &Entry, theme: &IconTheme) -> gio::ThemedIcon {
+pub fn gicon_for_entry(entry: &Entry, theme: &IconTheme) -> gio::Icon {
+    if *theme == IconTheme::System {
+        return system_icon(entry);
+    }
     let name = icon_for_entry_themed(entry, theme);
-    gio::ThemedIcon::from_names(&fallback_chain(name))
+    gio::ThemedIcon::from_names(&fallback_chain(name)).upcast()
+}
+
+/// What Dolphin or Nautilus would show with the same icon theme: the icon
+/// for the file's MIME type (guessed from the name, no disk access), and
+/// the special icons for Home, Documents, Pictures… Each comes with GIO's
+/// own fallbacks down to a generic icon.
+pub fn system_icon(entry: &Entry) -> gio::Icon {
+    if entry.is_dir {
+        let names: Vec<&str> = special_folder_icon(&entry.path)
+            .into_iter()
+            .chain(["folder"])
+            .collect();
+        return gio::ThemedIcon::from_names(&names).upcast();
+    }
+    let (content_type, _) = gio::content_type_guess(Some(&entry.path), None);
+    gio::content_type_get_icon(&content_type)
+}
+
+/// "folder-documents" for the XDG Documents folder, and so on.
+fn special_folder_icon(path: &std::path::Path) -> Option<&'static str> {
+    use std::path::PathBuf;
+    thread_local! {
+        // dirs:: re-reads user-dirs.dirs on every call; once is enough.
+        static SPECIAL: Vec<(PathBuf, &'static str)> = [
+            (dirs::home_dir(), "user-home"),
+            (dirs::desktop_dir(), "user-desktop"),
+            (dirs::document_dir(), "folder-documents"),
+            (dirs::download_dir(), "folder-download"),
+            (dirs::picture_dir(), "folder-pictures"),
+            (dirs::audio_dir(), "folder-music"),
+            (dirs::video_dir(), "folder-videos"),
+            (dirs::template_dir(), "folder-templates"),
+            (dirs::public_dir(), "folder-publicshare"),
+        ]
+        .into_iter()
+        .filter_map(|(dir, icon)| Some((dir?, icon)))
+        .collect();
+    }
+    SPECIAL.with(|special| {
+        // Home comes first, so an XDG dir that points at $HOME doesn't win.
+        special
+            .iter()
+            .find(|(dir, _)| dir == path)
+            .map(|(_, icon)| *icon)
+    })
 }
 
 fn fallback_chain(name: &str) -> Vec<&str> {
@@ -57,7 +107,7 @@ fn fallback_chain(name: &str) -> Vec<&str> {
 fn dir_icon(theme: &IconTheme) -> &'static str {
     match theme {
         IconTheme::Minimal => "folder-symbolic",
-        IconTheme::Colorful => "folder",
+        IconTheme::System | IconTheme::Colorful => "folder",
         IconTheme::Outline => "folder-open-symbolic",
     }
 }

@@ -26,7 +26,9 @@ pub fn create_file_row(entry: &Entry, config: &AppConfig) -> Box {
     let icon: Image = if has_thumb {
         thumbnail::request_thumbnail(&entry.path, icon_sz)
     } else {
-        let icon_classes = if entry.is_dir || config.icon_theme == IconTheme::Colorful {
+        let icon_classes = if (entry.is_dir && config.icon_theme != IconTheme::System)
+            || config.icon_theme == IconTheme::Colorful
+        {
             vec![icon_css_class(entry).to_string()]
         } else {
             vec![]

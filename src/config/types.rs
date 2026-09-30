@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 /// Determines which icon set to use for file/folder display.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum IconTheme {
+    /// The desktop's icon theme in full color (Tela, Papirus, Breeze,
+    /// Adwaita…), with per-type file icons and special folder icons.
+    System,
     Minimal,
     Colorful,
     Outline,
@@ -12,11 +15,12 @@ pub enum IconTheme {
 
 impl IconTheme {
     pub fn all_names() -> Vec<&'static str> {
-        vec!["Minimal", "Colorful", "Outline"]
+        vec!["System", "Minimal", "Colorful", "Outline"]
     }
 
     pub fn display_name(&self) -> &'static str {
         match self {
+            IconTheme::System => "System",
             IconTheme::Minimal => "Minimal",
             IconTheme::Colorful => "Colorful",
             IconTheme::Outline => "Outline",
@@ -25,6 +29,7 @@ impl IconTheme {
 
     pub fn from_name(name: &str) -> IconTheme {
         match name {
+            "System" => IconTheme::System,
             "Colorful" => IconTheme::Colorful,
             "Outline" => IconTheme::Outline,
             _ => IconTheme::Minimal,
@@ -133,7 +138,7 @@ impl Default for AppConfig {
             theme: "Hearth".to_string(),
             icon_size: 48,
             view_mode: ViewMode::Grid,
-            icon_theme: IconTheme::Minimal,
+            icon_theme: IconTheme::System,
             show_hidden: false,
             show_file_size: true,
             show_modified_date: true,

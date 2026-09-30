@@ -31,7 +31,7 @@ Tiles are often half or a quarter of the screen, so the layout adapts:
 |---|---|
 | UI font | `fonts.ui = "system"` (default) uses your desktop font (`gtk-font-name`). On KDE this is the font Plasma exports to GTK apps. |
 | Light / dark | With `base-light` set in `theme.toml` (or `mode = "system"`), Diptych switches presets when the desktop's preference changes. It uses the freedesktop settings portal. The dark preference was verified on KDE Plasma through the portal, and the light switch was verified with `ADW_DEBUG_COLOR_SCHEME=prefer-light`. It should also work on GNOME and on Hyprland with `xdg-desktop-portal-gtk` or `-hyprland`, but that hasn't been tested yet. |
-| Icon theme | Your icon theme (Adwaita, Breeze, Papirus, Tela…). The inspector uses GIO's content-type icons, which fall back gracefully. |
+| Icon theme | Your icon theme (Adwaita, Breeze, Papirus, Tela…). With the default **System** icon style (Customize → Appearance → Icon Style), files and folders use the theme's full-color icons, picked by MIME type like Dolphin and Nautilus do, and Home, Documents, Downloads and the other XDG folders get their special icons. **Minimal**, **Colorful** and **Outline** use symbolic icons tinted with the theme's `[files]` colors instead. |
 
 ## Installing and making Diptych the default
 
