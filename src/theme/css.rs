@@ -222,9 +222,9 @@ mod tests {
         assert!(css.contains("font-family: Figtree;"));
         // Presets default to the desktop font: no font-family rule.
         assert!(!generate(&theme("")).unwrap().contains("font-family"));
-        // .file-card: radius 1.0 × 20, padding 14 × 1.25, name 12 × 1.5
+        // .file-card: radius 1.0 × 20, padding 12 × 1.25; .group-header 12 × 1.5
         assert!(css.contains("border-radius: 20px;"));
-        assert!(css.contains("padding: 18px"));
+        assert!(css.contains("padding: 15px"));
         assert!(css.contains("font-size: 18px;"));
     }
 

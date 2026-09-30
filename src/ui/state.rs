@@ -659,10 +659,6 @@ impl AppState {
         Ok(())
     }
 
-    pub fn trash(self: &Rc<Self>, path: &Path) {
-        self.trash_all(&[path.to_path_buf()]);
-    }
-
     fn trash_all(self: &Rc<Self>, paths: &[PathBuf]) {
         if paths.is_empty() {
             return;

@@ -84,45 +84,50 @@ fn build_image_preview(container: &Box, file_path: &Path, max_w: i32, max_h: i32
     let path = file_path.to_path_buf();
     let container_weak = container.downgrade();
 
-    // Async load: run the heavy pixbuf decode off the next idle tick
-    glib::idle_add_local_once(move || {
+    // Decode on a worker thread: a large photo takes long enough to make the
+    // window stutter if it's decoded on the main loop.
+    glib::spawn_future_local(async move {
+        // A Pixbuf can't cross threads; its pixel bytes can.
+        let decoded = gio::spawn_blocking(move || {
+            load_scaled_pixbuf(&path, max_w, max_h).and_then(|pb| {
+                let bytes = pb.read_pixel_bytes();
+                Some((
+                    bytes,
+                    pb.width(),
+                    pb.height(),
+                    pb.rowstride(),
+                    pb.has_alpha(),
+                ))
+            })
+        })
+        .await
+        .ok()
+        .flatten();
         let Some(container) = container_weak.upgrade() else {
             return;
         };
-
-        // Try to load and scale the image
-        match load_scaled_pixbuf(&path, max_w, max_h) {
-            Some(pixbuf) => {
-                // Remove spinner + label
-                while let Some(child) = container.first_child() {
-                    container.remove(&child);
-                }
-
-                let picture = Picture::for_paintable(&gtk4::gdk::Texture::for_pixbuf(&pixbuf));
+        while let Some(child) = container.first_child() {
+            container.remove(&child);
+        }
+        match decoded {
+            Some((bytes, w, h, stride, alpha)) => {
+                use gtk4::gdk::MemoryFormat;
+                let format = if alpha {
+                    MemoryFormat::R8g8b8a8
+                } else {
+                    MemoryFormat::R8g8b8
+                };
+                let texture = gtk4::gdk::MemoryTexture::new(w, h, format, &bytes, stride as usize);
+                let picture = Picture::for_paintable(&texture);
                 picture.set_can_shrink(true);
                 picture.set_halign(Align::Center);
                 picture.set_valign(Align::Center);
                 picture.add_css_class("preview-image");
                 container.append(&picture);
-
-                // Show dimensions
-                let w = pixbuf.width();
-                let h = pixbuf.height();
-                let dim_label = Label::builder()
-                    .label(&format!("{}×{}", w, h))
-                    .css_classes(vec!["preview-dimension-label".to_string()])
-                    .halign(Align::Center)
-                    .build();
-                container.append(&dim_label);
             }
             None => {
-                // Remove spinner
-                while let Some(child) = container.first_child() {
-                    container.remove(&child);
-                }
-
                 let err_label = Label::builder()
-                    .label("⚠ Could not load preview")
+                    .label("Could not load preview")
                     .css_classes(vec!["preview-error-label".to_string()])
                     .halign(Align::Center)
                     .build();

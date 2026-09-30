@@ -13,14 +13,7 @@ use std::rc::Rc;
 /// Builds the sidebar around `places` (filled later by `bind_places`).
 pub fn build_sidebar(places: &Box) -> gtk4::Widget {
     let column = Box::builder().orientation(Orientation::Vertical).build();
-    column.append(
-        &Label::builder()
-            .label("PLACES")
-            .css_classes(["sidebar-title"])
-            .halign(Align::Start)
-            .margin_top(8)
-            .build(),
-    );
+    column.append(&section_title("Places"));
     column.append(places);
 
     ScrolledWindow::builder()
@@ -51,11 +44,6 @@ pub fn bind_places(state: &Rc<AppState>) {
         ("Pictures", "folder-pictures-symbolic", dirs::picture_dir()),
         ("Music", "folder-music-symbolic", dirs::audio_dir()),
         ("Videos", "folder-videos-symbolic", dirs::video_dir()),
-        (
-            "Computer",
-            "drive-harddisk-symbolic",
-            Some(PathBuf::from("/")),
-        ),
     ];
 
     for (name, icon, path) in places {
@@ -72,6 +60,21 @@ pub fn bind_places(state: &Rc<AppState>) {
         btn.connect_clicked(move |_| state_c.navigate_to(path.clone()));
         state.places.append(&btn);
     }
+
+    state.places.append(&section_title("Devices"));
+    let computer = widgets::create_place_row("Computer", "drive-harddisk-symbolic");
+    computer.set_tooltip_text(Some("/"));
+    let state_c = state.clone();
+    computer.connect_clicked(move |_| state_c.navigate_to(PathBuf::from("/")));
+    state.places.append(&computer);
+}
+
+fn section_title(title: &str) -> Label {
+    Label::builder()
+        .label(title)
+        .css_classes(["sidebar-title"])
+        .halign(Align::Start)
+        .build()
 }
 
 /// Highlights the place matching the current folder.

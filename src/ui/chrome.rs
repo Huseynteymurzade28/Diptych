@@ -249,6 +249,9 @@ const TOOLTIPS: &[(HeaderItem, &str, &str)] = &[
 
 fn set_width(split: &adw::OverlaySplitView, width: u32) {
     let w = width as f64;
+    // layout.toml widths are pixels; the default unit (sp) follows the text
+    // scale and gave narrower panes on some setups (#24).
+    split.set_sidebar_width_unit(adw::LengthUnit::Px);
     split.set_min_sidebar_width(w);
     split.set_max_sidebar_width(w);
     // With min == max the fraction only matters when collapsed.

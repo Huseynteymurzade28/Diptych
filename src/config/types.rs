@@ -96,7 +96,7 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            theme: "Catppuccin".to_string(),
+            theme: "Hearth".to_string(),
             icon_size: 48,
             view_mode: ViewMode::Grid,
             icon_theme: IconTheme::Minimal,

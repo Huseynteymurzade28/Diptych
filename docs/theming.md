@@ -29,7 +29,7 @@ base = "nord"
 
 ## Built-in presets
 
-`catppuccin-mocha` (default), `rose-pine`, `tokyo-soft`, `nord`, `gruvbox`, `cozy-latte` (light),
+`hearth` (default for new installs: warm and low-contrast), `catppuccin-mocha`, `rose-pine`, `tokyo-soft`, `nord`, `gruvbox`, `cozy-latte` (light),
 `deep-dark`, `high-contrast`.
 
 Their sources live in [`src/theme/presets/`](../src/theme/presets). Copy one to
@@ -157,8 +157,8 @@ with a line and column, and the rest of the file still applies.
 /* Bigger file names in grid view */
 .file-card-name { font-size: 14px; }
 
-/* No shadows on cards */
-.file-card, .file-card:hover { box-shadow: none; }
+/* Framed cards instead of flat tiles */
+.file-card { background-color: alpha(currentColor, 0.04); border-color: alpha(currentColor, 0.06); }
 ```
 
 ### Stable CSS classes
@@ -172,7 +172,8 @@ with a line and column, and the rest of the file still applies.
 | Tree | `.tree-row-btn`, `.tree-row-selected`, `.tree-name`, `.tree-name-dir`, `.tree-kind-<kind>`, `.tree-badge`, `.tree-meta` |
 | Menus | `.context-menu`, `.context-menu-item`, `.context-menu-danger`, `.context-menu-title` |
 | Buttons | `.btn-primary`, `.btn-secondary` |
-| Inspector | `.inspector-title`, `.inspector-subtitle` |
+| Inspector | `.inspector-title`, `.inspector-subtitle`, `.inspector-details`, `.inspector-action` |
+| File view | `.status-bar`, `.folder-status` (empty or unreadable folder) |
 | Icons | `.icon-<kind>` (same kinds as `[files]`) |
 
 The full generated stylesheet is built from [`src/theme/base.css`](../src/theme/base.css).

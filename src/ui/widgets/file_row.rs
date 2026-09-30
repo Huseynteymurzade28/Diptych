@@ -26,7 +26,7 @@ pub fn create_file_row(entry: &Entry, config: &AppConfig) -> Box {
     let icon: Image = if has_thumb {
         thumbnail::request_thumbnail(&entry.path, icon_sz)
     } else {
-        let icon_classes = if config.icon_theme == IconTheme::Colorful {
+        let icon_classes = if entry.is_dir || config.icon_theme == IconTheme::Colorful {
             vec![icon_css_class(entry).to_string()]
         } else {
             vec![]
@@ -65,7 +65,7 @@ pub fn create_file_row(entry: &Entry, config: &AppConfig) -> Box {
             .label(&entry.modified_display())
             .css_classes(vec!["file-row-meta".to_string()])
             .halign(Align::End)
-            .width_chars(16)
+            .width_chars(15)
             .xalign(1.0)
             .build();
         container.append(&date_label);

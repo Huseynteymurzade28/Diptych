@@ -40,9 +40,14 @@ pub struct FileView {
     grid: gtk4::GridView,
     list: gtk4::ListView,
     scroll: gtk4::ScrolledWindow,
-    /// Scrolled view + empty / error message on top.
-    pub root: gtk4::Overlay,
-    status: gtk4::Label,
+    /// Scrolled view + empty / error page on top.
+    root: gtk4::Overlay,
+    /// `root` above the status bar; what the window shows.
+    pub widget: gtk4::Box,
+    status: adw::StatusPage,
+    /// Bottom bar: item counts, selection summary.
+    counts: gtk4::Label,
+    selection_summary: gtk4::Label,
     item_menu: gtk4::PopoverMenu,
     /// actions.toml entries that apply to the selection; filled on popup.
     custom_menu: gio::Menu,
@@ -93,17 +98,37 @@ impl FileView {
             .hexpand(true)
             .child(&grid)
             .build();
-        let status = gtk4::Label::builder()
-            .css_classes(["inspector-subtitle"])
-            .halign(gtk4::Align::Center)
-            .valign(gtk4::Align::Center)
-            .justify(gtk4::Justification::Center)
-            .wrap(true)
+        let status = adw::StatusPage::builder()
+            .css_classes(["compact", "folder-status"])
             .can_target(false)
             .visible(false)
             .build();
-        let root = gtk4::Overlay::builder().child(&scroll).build();
+        let root = gtk4::Overlay::builder()
+            .child(&scroll)
+            .vexpand(true)
+            .build();
         root.add_overlay(&status);
+
+        let counts = gtk4::Label::builder()
+            .xalign(0.0)
+            .hexpand(true)
+            .ellipsize(gtk4::pango::EllipsizeMode::End)
+            .build();
+        let selection_summary = gtk4::Label::builder()
+            .xalign(1.0)
+            .ellipsize(gtk4::pango::EllipsizeMode::Start)
+            .build();
+        let status_bar = gtk4::Box::builder()
+            .spacing(12)
+            .css_classes(["status-bar"])
+            .build();
+        status_bar.append(&counts);
+        status_bar.append(&selection_summary);
+        let widget = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Vertical)
+            .build();
+        widget.append(&root);
+        widget.append(&status_bar);
         // Key events bubble up from the focused grid / list to here.
         let shortcuts = gtk4::ShortcutController::new();
         root.add_controller(shortcuts.clone());
@@ -123,7 +148,10 @@ impl FileView {
             list,
             scroll,
             root,
+            widget,
             status,
+            counts,
+            selection_summary,
             item_menu,
             custom_menu,
             shortcuts,
@@ -170,6 +198,7 @@ impl FileView {
             self.selection.connect_selection_changed(move |_, _, _| {
                 if let (Some(view), Some(state)) = (view.upgrade(), state.upgrade()) {
                     view.sync(&state);
+                    view.update_selection_summary();
                 }
             });
         }
@@ -346,17 +375,65 @@ impl FileView {
     }
 
     fn update_status(&self) {
-        let message = if let Some(err) = self.error.borrow().as_ref() {
-            Some(format!("Can’t show this folder\n{}", err))
-        } else if !self.loading.get() && self.store.n_items() == 0 {
-            Some("This folder is empty".to_string())
-        } else {
-            None
-        };
-        self.status.set_visible(message.is_some());
-        if let Some(message) = message {
-            self.status.set_label(&message);
+        let error = self.error.borrow().clone();
+        let empty = !self.loading.get() && self.store.n_items() == 0;
+        if let Some(err) = &error {
+            self.status
+                .set_icon_name(Some("action-unavailable-symbolic"));
+            self.status.set_title("Can’t Open This Folder");
+            self.status
+                .set_description(Some(&glib::markup_escape_text(err)));
+        } else if empty {
+            self.status.set_icon_name(Some("folder-symbolic"));
+            self.status.set_title("This Folder Is Empty");
+            self.status
+                .set_description(Some("Right-click to create a folder or a file."));
         }
+        self.status.set_visible(error.is_some() || empty);
+        self.update_counts();
+    }
+
+    /// "4 folders, 12 files" on the left, the selection on the right.
+    fn update_counts(&self) {
+        if self.loading.get() {
+            self.counts.set_label("Loading…");
+            self.selection_summary.set_label("");
+            return;
+        }
+        let n = self.store.n_items();
+        let folders = (0..n)
+            .filter(|&i| self.store.item(i).is_some_and(|o| entry_ref(&o).is_dir))
+            .count();
+        self.counts
+            .set_label(&count_summary(folders, n as usize - folders));
+        self.update_selection_summary();
+    }
+
+    /// The right side of the status bar. Runs on every selection change,
+    /// so it doesn't walk the whole folder like `update_counts`.
+    fn update_selection_summary(&self) {
+        if self.loading.get() {
+            return;
+        }
+        let selected = self.selected_entries();
+        let summary = match selected.as_slice() {
+            [] => String::new(),
+            [one] if one.is_dir => format!("“{}” selected", one.name),
+            [one] => format!("“{}” selected ({})", one.name, one.size_display()),
+            many => {
+                let bytes: u64 = many.iter().filter(|e| !e.is_dir).map(|e| e.size).sum();
+                if many.iter().all(|e| e.is_dir) {
+                    format!("{} items selected", many.len())
+                } else {
+                    format!(
+                        "{} items selected ({})",
+                        many.len(),
+                        crate::filesystem::format_size(bytes)
+                    )
+                }
+            }
+        };
+        self.selection_summary.set_label(&summary);
     }
 
     // ─── Live updates ───
@@ -687,6 +764,17 @@ fn decorate_item(widget: &gtk4::Box, entry: &Entry, item: &gtk4::ListItem, view:
 
 // ─── Helpers ───
 
+/// "3 folders, 1 file", "Empty".
+fn count_summary(folders: usize, files: usize) -> String {
+    let plural = |n: usize, word: &str| format!("{} {}{}", n, word, if n == 1 { "" } else { "s" });
+    match (folders, files) {
+        (0, 0) => "Empty".into(),
+        (f, 0) => plural(f, "folder"),
+        (0, n) => plural(n, "file"),
+        (f, n) => format!("{}, {}", plural(f, "folder"), plural(n, "file")),
+    }
+}
+
 /// Borrows the `Entry` inside a model item.
 fn entry_ref(obj: &impl IsA<glib::Object>) -> std::cell::Ref<'_, Entry> {
     obj.as_ref()
@@ -739,4 +827,17 @@ fn item_menu_model(custom: &gio::Menu) -> gio::Menu {
     remove.append(Some("Delete Permanently…"), Some("win.delete-selection"));
     menu.append_section(None, &remove);
     menu
+}
+
+#[cfg(test)]
+mod tests {
+    use super::count_summary;
+
+    #[test]
+    fn count_summaries() {
+        assert_eq!(count_summary(0, 0), "Empty");
+        assert_eq!(count_summary(1, 0), "1 folder");
+        assert_eq!(count_summary(0, 2), "2 files");
+        assert_eq!(count_summary(3, 1), "3 folders, 1 file");
+    }
 }

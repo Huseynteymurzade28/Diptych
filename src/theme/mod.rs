@@ -277,6 +277,7 @@ fn preset_name(src: &str) -> Option<String> {
 /// Maps the pre-token theme names stored in `config.toml` to preset ids.
 fn legacy_preset_id(name: &str) -> &'static str {
     match name {
+        "Hearth" => "hearth",
         "Rosé Pine" => "rose-pine",
         "Tokyo Soft" => "tokyo-soft",
         "Nord" => "nord",
@@ -358,6 +359,7 @@ mod tests {
         let file = ThemeFile::parse(&src).unwrap();
         assert_eq!(file.base.as_deref(), Some("nord"));
         assert_eq!(legacy_preset_id("Catppuccin"), "catppuccin-mocha");
+        assert_eq!(legacy_preset_id("Hearth"), "hearth");
         assert_eq!(legacy_preset_id("something else"), "catppuccin-mocha");
     }
 

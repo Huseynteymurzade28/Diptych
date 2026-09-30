@@ -122,7 +122,7 @@ pub fn open(
     // `content_scroll`.
     let file_view = FileView::new();
     let content_stack = gtk4::Stack::builder().css_classes(["content-view"]).build();
-    content_stack.add_named(&file_view.root, Some("files"));
+    content_stack.add_named(&file_view.widget, Some("files"));
     content_stack.add_named(&content_scroll, Some("other"));
 
     let inspector_pane = inspector::build_pane();
