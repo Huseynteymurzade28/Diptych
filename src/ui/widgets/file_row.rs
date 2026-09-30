@@ -1,7 +1,7 @@
 use crate::config::{AppConfig, IconTheme};
 use crate::filesystem::Entry;
 use crate::thumbnail;
-use crate::ui::widgets::icon::{icon_css_class, icon_for_entry_themed};
+use crate::ui::widgets::icon::{gicon_for_entry, icon_css_class};
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Image, Label, Orientation};
 
@@ -11,8 +11,8 @@ use gtk4::{Align, Box, Image, Label, Orientation};
 
 /// Creates a compact list-row widget (a `ListView` item).
 pub fn create_file_row(entry: &Entry, config: &AppConfig) -> Box {
-    let icon_name = icon_for_entry_themed(entry, &config.icon_theme);
-    let icon_sz = (config.icon_size / 3).max(16).min(24);
+    let gicon = gicon_for_entry(entry, &config.icon_theme);
+    let icon_sz = (config.icon_size / 3).clamp(16, 24);
 
     let container = Box::builder()
         .orientation(Orientation::Horizontal)
@@ -33,7 +33,7 @@ pub fn create_file_row(entry: &Entry, config: &AppConfig) -> Box {
         };
 
         Image::builder()
-            .icon_name(icon_name)
+            .gicon(&gicon)
             .pixel_size(icon_sz)
             .css_classes(icon_classes)
             .build()
@@ -52,7 +52,7 @@ pub fn create_file_row(entry: &Entry, config: &AppConfig) -> Box {
     // Optional metadata columns
     if config.show_file_size {
         let size_label = Label::builder()
-            .label(&entry.size_display())
+            .label(entry.size_display())
             .css_classes(vec!["file-row-meta".to_string()])
             .halign(Align::End)
             .width_chars(8)
@@ -62,7 +62,7 @@ pub fn create_file_row(entry: &Entry, config: &AppConfig) -> Box {
     }
     if config.show_modified_date {
         let date_label = Label::builder()
-            .label(&entry.modified_display())
+            .label(entry.modified_display())
             .css_classes(vec!["file-row-meta".to_string()])
             .halign(Align::End)
             .width_chars(15)

@@ -18,6 +18,11 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Check formatting
+        run: cargo fmt --check
 
       - name: Install System Dependencies
         run: |
@@ -38,6 +43,9 @@ jobs:
 
       - name: Build
         run: cargo build --verbose
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: Run tests
         run: cargo test --verbose

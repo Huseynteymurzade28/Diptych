@@ -205,7 +205,14 @@ fn render_tree(
                 classes.push("tree-icon-colorful".to_string());
             }
             Image::builder()
-                .icon_name(entry_icon_name)
+                .gicon(&gio::ThemedIcon::from_names(&[
+                    entry_icon_name,
+                    if entry.is_dir {
+                        "folder-symbolic"
+                    } else {
+                        "text-x-generic-symbolic"
+                    },
+                ]))
                 .pixel_size(icon_sz)
                 .css_classes(classes)
                 .build()
@@ -248,7 +255,7 @@ fn render_tree(
                     .count();
                 if count > 0 {
                     let badge = Label::builder()
-                        .label(&format!("{}", count))
+                        .label(format!("{}", count))
                         .halign(Align::End)
                         .css_classes(vec!["tree-badge".to_string()])
                         .build();
@@ -257,7 +264,7 @@ fn render_tree(
             }
         } else if cfg.show_file_size {
             let size_label = Label::builder()
-                .label(&entry.size_display())
+                .label(entry.size_display())
                 .halign(Align::End)
                 .css_classes(vec!["tree-meta".to_string()])
                 .build();

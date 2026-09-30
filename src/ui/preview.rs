@@ -89,15 +89,15 @@ fn build_image_preview(container: &Box, file_path: &Path, max_w: i32, max_h: i32
     glib::spawn_future_local(async move {
         // A Pixbuf can't cross threads; its pixel bytes can.
         let decoded = gio::spawn_blocking(move || {
-            load_scaled_pixbuf(&path, max_w, max_h).and_then(|pb| {
+            load_scaled_pixbuf(&path, max_w, max_h).map(|pb| {
                 let bytes = pb.read_pixel_bytes();
-                Some((
+                (
                     bytes,
                     pb.width(),
                     pb.height(),
                     pb.rowstride(),
                     pb.has_alpha(),
-                ))
+                )
             })
         })
         .await
@@ -144,16 +144,13 @@ fn load_scaled_pixbuf(path: &Path, max_w: i32, max_h: i32) -> Option<Pixbuf> {
         Ok(pb) => Some(pb),
         Err(_) => {
             // Fallback: try loading full image then scaling
-            Pixbuf::from_file(path)
-                .ok()
-                .map(|pb| {
-                    let (ow, oh) = (pb.width() as f64, pb.height() as f64);
-                    let scale = (max_w as f64 / ow).min(max_h as f64 / oh).min(1.0);
-                    let new_w = (ow * scale).max(1.0) as i32;
-                    let new_h = (oh * scale).max(1.0) as i32;
-                    pb.scale_simple(new_w, new_h, gtk4::gdk_pixbuf::InterpType::Bilinear)
-                })
-                .flatten()
+            Pixbuf::from_file(path).ok().and_then(|pb| {
+                let (ow, oh) = (pb.width() as f64, pb.height() as f64);
+                let scale = (max_w as f64 / ow).min(max_h as f64 / oh).min(1.0);
+                let new_w = (ow * scale).max(1.0) as i32;
+                let new_h = (oh * scale).max(1.0) as i32;
+                pb.scale_simple(new_w, new_h, gtk4::gdk_pixbuf::InterpType::Bilinear)
+            })
         }
     }
 }
