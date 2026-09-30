@@ -99,7 +99,7 @@ impl GraphState {
     }
 
     /// Adds a root node at the centre.
-    fn add_root(&mut self, path: &PathBuf) -> usize {
+    fn add_root(&mut self, path: &Path) -> usize {
         let id = self.next_id;
         self.next_id += 1;
         let label = path
@@ -109,7 +109,7 @@ impl GraphState {
         self.nodes.push(GraphNode {
             id,
             label,
-            path: path.clone(),
+            path: path.to_path_buf(),
             is_dir: true,
             is_expanded: false,
             parent_id: None,
@@ -338,7 +338,7 @@ pub fn build_graph_view(root: &Path) -> DrawingArea {
     // Initialise with root node (expanded)
     {
         let mut s = state.borrow_mut();
-        let root_id = s.add_root(&root.to_path_buf());
+        let root_id = s.add_root(root);
         s.expand_node(root_id);
     }
 

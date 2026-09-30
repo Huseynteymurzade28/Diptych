@@ -100,9 +100,8 @@ pub fn request_thumbnail(source_path: &Path, icon_size: i32) -> Image {
                 }
             }
 
-            // Generation failed — show error icon so the user knows
-            image.set_icon_name(Some("dialog-warning-symbolic"));
-            image.remove_css_class("thumbnail-placeholder");
+            // Generation failed (empty or undecodable file): keep the
+            // file-type placeholder rather than an alarming warning icon.
             image.add_css_class("thumbnail-error");
         });
     });

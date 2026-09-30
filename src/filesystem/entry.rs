@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn folders_first_then_case_insensitive_names() {
-        let mut entries = vec![
+        let mut entries = [
             entry("b.txt", false),
             entry("Zeta", true),
             entry("A.txt", false),

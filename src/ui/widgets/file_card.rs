@@ -1,7 +1,7 @@
 use crate::config::{AppConfig, IconTheme};
 use crate::filesystem::Entry;
 use crate::thumbnail;
-use crate::ui::widgets::icon::{icon_css_class, icon_for_entry_themed};
+use crate::ui::widgets::icon::{gicon_for_entry, icon_css_class};
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Image, Label, Orientation};
 
@@ -11,7 +11,7 @@ use gtk4::{Align, Box, Image, Label, Orientation};
 
 /// Creates a card-style widget for grid view (a `GridView` item).
 pub fn create_file_card(entry: &Entry, config: &AppConfig) -> Box {
-    let icon_name = icon_for_entry_themed(entry, &config.icon_theme);
+    let gicon = gicon_for_entry(entry, &config.icon_theme);
 
     let card_box = Box::builder()
         .orientation(Orientation::Vertical)
@@ -35,7 +35,7 @@ pub fn create_file_card(entry: &Entry, config: &AppConfig) -> Box {
         };
 
         Image::builder()
-            .icon_name(icon_name)
+            .gicon(&gicon)
             .pixel_size(config.icon_size)
             .halign(Align::Center)
             .css_classes(icon_classes)

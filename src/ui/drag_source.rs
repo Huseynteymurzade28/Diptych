@@ -167,7 +167,7 @@ fn render_ghost_texture(text: &str) -> Option<gdk::Texture> {
     pangocairo::functions::show_layout(&cr, &layout);
 
     drop(cr);
-    let _ = surface.flush();
+    surface.flush();
 
     // Convert cairo surface → GdkTexture via GBytes
     let data = surface.data().ok()?;

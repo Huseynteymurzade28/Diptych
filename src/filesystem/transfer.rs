@@ -151,7 +151,7 @@ mod tests {
         fs::create_dir(&dest).unwrap();
 
         // Copy twice: the second gets a free name.
-        let out = transfer(&[src.clone()], &dest, Mode::Copy);
+        let out = transfer(std::slice::from_ref(&src), &dest, Mode::Copy);
         assert_eq!(out[0].1, Outcome::Done(dest.join("src")));
         assert_eq!(
             fs::read_to_string(dest.join("src/sub/f.txt")).unwrap(),
@@ -161,20 +161,20 @@ mod tests {
             .unwrap()
             .file_type()
             .is_symlink());
-        let out = transfer(&[src.clone()], &dest, Mode::Copy);
+        let out = transfer(std::slice::from_ref(&src), &dest, Mode::Copy);
         assert_eq!(out[0].1, Outcome::Done(dest.join("src (2)")));
 
         // Into itself: refused.
-        let out = transfer(&[src.clone()], &src.join("sub"), Mode::Copy);
+        let out = transfer(std::slice::from_ref(&src), &src.join("sub"), Mode::Copy);
         assert!(matches!(out[0].1, Outcome::Failed(_)));
 
         // Move within the same folder: nothing to do. Move elsewhere: gone from src.
         let file = src.join("sub/f.txt");
         assert_eq!(
-            transfer(&[file.clone()], &src.join("sub"), Mode::Move)[0].1,
+            transfer(std::slice::from_ref(&file), &src.join("sub"), Mode::Move)[0].1,
             Outcome::Unchanged
         );
-        let out = transfer(&[file.clone()], &dest, Mode::Move);
+        let out = transfer(std::slice::from_ref(&file), &dest, Mode::Move);
         assert_eq!(out[0].1, Outcome::Done(dest.join("f.txt")));
         assert!(!file.exists());
 

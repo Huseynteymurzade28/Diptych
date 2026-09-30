@@ -28,6 +28,30 @@ pub fn icon_for_entry_themed(entry: &Entry, theme: &IconTheme) -> &'static str {
     }
 }
 
+/// The entry's icon with a fallback: names like `text-x-python` or
+/// `application-x-shellscript` exist in Papirus, Tela or Breeze but not in
+/// Adwaita, so a generic document icon stands in for them rather than
+/// GTK's "missing image" placeholder (#16).
+pub fn gicon_for_entry(entry: &Entry, theme: &IconTheme) -> gio::ThemedIcon {
+    let name = icon_for_entry_themed(entry, theme);
+    gio::ThemedIcon::from_names(&fallback_chain(name))
+}
+
+fn fallback_chain(name: &str) -> Vec<&str> {
+    let symbolic = name.ends_with("-symbolic");
+    let generic = match (name.starts_with("folder"), symbolic) {
+        (true, true) => "folder-symbolic",
+        (true, false) => "folder",
+        (false, true) => "text-x-generic-symbolic",
+        (false, false) => "text-x-generic",
+    };
+    if name == generic {
+        vec![name]
+    } else {
+        vec![name, generic]
+    }
+}
+
 // ─── Directory Icons ───
 
 fn dir_icon(theme: &IconTheme) -> &'static str {
@@ -170,5 +194,27 @@ pub fn icon_css_class(entry: &Entry) -> &'static str {
         "md" | "txt" | "log" | "csv" => "icon-text",
         "json" | "toml" | "yaml" | "yml" | "xml" => "icon-config",
         _ => "icon-default",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fallback_chain;
+
+    #[test]
+    fn falls_back_to_generic_icons_of_the_same_style() {
+        assert_eq!(
+            fallback_chain("text-x-python"),
+            ["text-x-python", "text-x-generic"]
+        );
+        assert_eq!(
+            fallback_chain("text-html-symbolic"),
+            ["text-html-symbolic", "text-x-generic-symbolic"]
+        );
+        assert_eq!(
+            fallback_chain("folder-open-symbolic"),
+            ["folder-open-symbolic", "folder-symbolic"]
+        );
+        assert_eq!(fallback_chain("text-x-generic"), ["text-x-generic"]);
     }
 }
