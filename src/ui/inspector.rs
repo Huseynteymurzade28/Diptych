@@ -47,7 +47,8 @@ pub fn refresh(state: &Rc<AppState>) {
     let fields = state.layout.borrow().inspector.fields.clone();
     let content_type = content_type(&entry);
 
-    pane.append(&preview_area(&entry, &content_type));
+    let system_icons = state.config.borrow().icon_theme == crate::config::IconTheme::System;
+    pane.append(&preview_area(&entry, &content_type, system_icons));
 
     let title = Label::builder()
         .label(display_name(&entry))
@@ -219,17 +220,24 @@ fn content_type(entry: &Entry) -> String {
         .to_string()
 }
 
-fn preview_area(entry: &Entry, content_type: &str) -> gtk4::Widget {
+fn preview_area(entry: &Entry, content_type: &str, system_icons: bool) -> gtk4::Widget {
     if !entry.is_dir && preview::supports_preview(&entry.path) {
         return preview::build_preview_widget(&entry.path, 260, 200).upcast();
     }
-    // Symbolic icon with GIO's own fallback chain: never a "missing" icon.
-    let icon = gio::content_type_get_symbolic_icon(content_type);
-    let image = Image::builder()
-        .gicon(&icon)
-        .pixel_size(96)
-        .css_classes([crate::ui::widgets::icon::icon_css_class(entry)])
-        .build();
+    // GIO's own fallback chains: never a "missing" icon. The System style
+    // shows the icon theme's full-color icon, the others a tinted symbolic.
+    let image = if system_icons {
+        Image::builder()
+            .gicon(&crate::ui::widgets::icon::system_icon(entry))
+            .pixel_size(96)
+            .build()
+    } else {
+        Image::builder()
+            .gicon(&gio::content_type_get_symbolic_icon(content_type))
+            .pixel_size(96)
+            .css_classes([crate::ui::widgets::icon::icon_css_class(entry)])
+            .build()
+    };
     let frame = Box::builder()
         .height_request(160)
         .halign(Align::Fill)

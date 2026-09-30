@@ -28,7 +28,9 @@ pub fn create_file_card(entry: &Entry, config: &AppConfig) -> Box {
     } else {
         // Folders always wear the folder color; files are tinted by kind
         // with the Colorful icon theme only.
-        let icon_classes = if entry.is_dir || config.icon_theme == IconTheme::Colorful {
+        let icon_classes = if (entry.is_dir && config.icon_theme != IconTheme::System)
+            || config.icon_theme == IconTheme::Colorful
+        {
             vec![icon_css_class(entry).to_string()]
         } else {
             vec![]
