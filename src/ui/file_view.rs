@@ -269,6 +269,9 @@ impl FileView {
 
         context_menu::attach_background_context_menu(&self.root, state);
 
+        // Files dropped on the background land in the current folder.
+        attach_drop_target(&self.root, Rc::downgrade(state), None);
+
         {
             let view = Rc::downgrade(self);
             self.search_entry.connect_search_changed(move |entry| {
@@ -497,8 +500,9 @@ impl FileView {
         } else if empty {
             self.status.set_icon_name(Some("folder-symbolic"));
             self.status.set_title("This Folder Is Empty");
-            self.status
-                .set_description(Some("Right-click to create a folder or a file."));
+            self.status.set_description(Some(
+                "Drop files here, or right-click to create a folder or a file.",
+            ));
         } else if no_match {
             self.status.set_icon_name(Some("edit-find-symbolic"));
             self.status.set_title("No Results");
@@ -871,6 +875,13 @@ fn decorate_item(widget: &gtk4::Box, entry: &Entry, item: &gtk4::ListItem, view:
         widget.add_controller(gesture);
     }
 
+    // Folders accept drops: the files move (or copy) into them.
+    if entry.is_dir {
+        if let Some(state) = view.upgrade().map(|v| v.state.borrow().clone()) {
+            attach_drop_target(widget, state, Some(entry.path.clone()));
+        }
+    }
+
     // Dragging a selected item drags the whole selection.
     {
         let (item, view, single) = (item.downgrade(), view.clone(), entry.clone());
@@ -889,6 +900,29 @@ fn decorate_item(widget: &gtk4::Box, entry: &Entry, item: &gtk4::ListItem, view:
 }
 
 // ─── Helpers ───
+
+/// Accepts dropped files into `dest`, or the current folder when `None`.
+/// Ctrl copies, Shift moves; otherwise same disk moves, another copies.
+fn attach_drop_target(
+    widget: &impl IsA<gtk4::Widget>,
+    state: Weak<AppState>,
+    dest: Option<PathBuf>,
+) {
+    let target = gtk4::DropTarget::new(
+        gdk::FileList::static_type(),
+        gdk::DragAction::COPY | gdk::DragAction::MOVE,
+    );
+    target.connect_drop(move |target, value, _, _| {
+        let (Some(state), Ok(files)) = (state.upgrade(), value.get::<gdk::FileList>()) else {
+            return false;
+        };
+        let paths: Vec<PathBuf> = files.files().iter().filter_map(|f| f.path()).collect();
+        let dest = dest.clone().unwrap_or_else(|| state.current_path());
+        state.drop_files(paths, dest, target.current_event_state());
+        true
+    });
+    widget.add_controller(target);
+}
 
 /// "3 folders, 1 file", "Empty".
 fn count_summary(folders: usize, files: usize) -> String {
@@ -948,6 +982,10 @@ fn item_menu_model(custom: &gio::Menu) -> gio::Menu {
     open.append(Some("Rename…"), Some("win.rename-selection"));
     open.append(Some("Add to Bookmarks"), Some("win.bookmark"));
     menu.append_section(None, &open);
+    let clipboard = gio::Menu::new();
+    clipboard.append(Some("Cut"), Some("win.cut"));
+    clipboard.append(Some("Copy"), Some("win.copy"));
+    menu.append_section(None, &clipboard);
     menu.append_section(None, custom);
     let remove = gio::Menu::new();
     remove.append(Some("Move to Trash"), Some("win.trash-selection"));

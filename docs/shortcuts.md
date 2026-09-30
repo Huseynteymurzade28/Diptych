@@ -46,6 +46,8 @@ actions use the same one, Diptych keeps the first and reports the other.
 | `rename-selection` | `F2` | ¹ |
 | `trash-selection` | `Delete` | ¹ |
 | `delete-selection` | `<Shift>Delete` | ¹ Asks first |
+| `copy` / `cut` | `<Ctrl>c` / `<Ctrl>x` | ¹ Interoperates with Nautilus, Dolphin and other file managers |
+| `paste` | `<Ctrl>v` | ¹ Into the current folder; never overwrites (`name (2).ext`) |
 | `select-all` | `<Ctrl>a` | ¹ |
 | `unselect-all` | `Escape` | ¹ |
 

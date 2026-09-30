@@ -79,3 +79,14 @@ ascending or descending. Folders always come first. The choice is saved in `conf
 Bookmarks live in the GTK bookmarks file (`~/.config/gtk-3.0/bookmarks`), so they are shared with
 Nautilus and the GTK file chooser. Add one with `Ctrl+D`, the item menu or the background menu;
 right-click a bookmark in the sidebar to remove it.
+
+## Copy, move and drag and drop
+
+`Ctrl+C` / `Ctrl+X` put the selection on the clipboard as `x-special/gnome-copied-files`, a file
+list (`text/uri-list`) and plain paths, so files copied in Diptych paste in Nautilus, Dolphin or a
+terminal, and the other way round. `Ctrl+V` pastes into the current folder. Nothing is ever
+overwritten: a name clash becomes `notes (2).txt`.
+
+Files dropped on the background land in the current folder; dropped on a folder, they go into it.
+Within one disk a drop moves, onto another disk it copies. Hold `Ctrl` to copy or `Shift` to move.
+Transfers run in the background; a toast appears if one takes a while, and failures are reported.

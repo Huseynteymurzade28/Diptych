@@ -16,6 +16,7 @@ pub mod shortcuts;
 pub mod sidebar;
 pub mod snapshot;
 pub mod state;
+pub mod transfer;
 pub mod tree_view;
 pub mod widgets;
 pub mod window;

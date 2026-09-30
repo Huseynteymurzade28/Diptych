@@ -102,6 +102,9 @@ pub const BINDABLE: &[Bindable] = {
             &["<Shift>Delete"],
             View,
         ),
+        bind("copy", "Copy", &["<Ctrl>c"], View),
+        bind("cut", "Cut", &["<Ctrl>x"], View),
+        bind("paste", "Paste", &["<Ctrl>v"], View),
         bind("select-all", "Select all", &["<Ctrl>a"], View),
         bind("unselect-all", "Clear selection", &["Escape"], View),
     ]
